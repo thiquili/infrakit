@@ -3,12 +3,246 @@ name = "infrakit"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
-dependencies = []
+requires-python = ">=3.11"
+dependencies = [
 
+]
+
+[dependency-groups]
+dev = [
+    "detect-secrets>=1.5.0",
+    "pre-commit>=4.5.0",
+    "pyright>=1.1.407",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.14.8",
+]
 [project.scripts]
 infrakit = "infrakit:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# pyproject.toml
+[tool.ruff]
+# Longueur de ligne - 88 est le standard Black, mais 100 est un bon compromis
+line-length = 100
+target-version = "py311"  # Ajuste selon ta version minimale supportée
+
+# Fichiers à exclure
+extend-exclude = [
+    ".venv",
+    "venv",
+    ".git",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    "build",
+    "dist",
+    "*.egg-info",
+]
+
+[tool.ruff.lint]
+# Sélection stricte des règles
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "N",      # pep8-naming
+    "UP",     # pyupgrade
+    "YTT",    # flake8-2020
+    "ANN",    # flake8-annotations
+    "ASYNC",  # flake8-async
+    "S",      # flake8-bandit (sécurité)
+    "BLE",    # flake8-blind-except
+    "FBT",    # flake8-boolean-trap
+    "B",      # flake8-bugbear
+    "A",      # flake8-builtins
+    "COM",    # flake8-commas
+    "C4",     # flake8-comprehensions
+    "DTZ",    # flake8-datetimez
+    "T10",    # flake8-debugger
+    "EM",     # flake8-errmsg
+    "EXE",    # flake8-executable
+    "ISC",    # flake8-implicit-str-concat
+    "ICN",    # flake8-import-conventions
+    "LOG",    # flake8-logging
+    "G",      # flake8-logging-format
+    "INP",    # flake8-no-pep420
+    "PIE",    # flake8-pie
+    "T20",    # flake8-print
+    "PYI",    # flake8-pyi
+    "PT",     # flake8-pytest-style
+    "Q",      # flake8-quotes
+    "RSE",    # flake8-raise
+    "RET",    # flake8-return
+    "SLF",    # flake8-self
+    "SLOT",   # flake8-slots
+    "SIM",    # flake8-simplify
+    "TID",    # flake8-tidy-imports
+    "TCH",    # flake8-type-checking
+    "ARG",    # flake8-unused-arguments
+    "PTH",    # flake8-use-pathlib
+    "PD",     # pandas-vet
+    "PGH",    # pygrep-hooks
+    "PL",     # pylint
+    "TRY",    # tryceratops
+    "FLY",    # flynt
+    "PERF",   # perflint
+    "RUF",    # ruff-specific rules
+]
+
+# Exceptions importantes pour un projet réaliste
+ignore = [
+    "ANN101",  # Missing type annotation for self
+    "ANN102",  # Missing type annotation for cls
+    "ANN401",  # Dynamically typed expressions (Any) - trop strict parfois
+    "COM812",  # Trailing comma missing - conflit avec le formatter
+    "ISC001",  # Implicit string concatenation - conflit avec le formatter
+    "D203",    # Conflit avec D211
+    "D213",    # Conflit avec D212
+    "E501",    # Line too long - géré par le formatter
+    "PLR0913", # Too many arguments - parfois nécessaire
+    "PLR2004", # Magic values - trop strict pour certains cas
+    "S101",    # Use of assert - utile pour les tests
+    "TRY003",  # Long messages in exceptions - trop strict
+]
+
+# Autoriser les imports non utilisés dans __init__.py
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "F403"]
+"tests/**/*.py" = [
+    "S101",    # assert allowed in tests
+    "ARG",     # Unused arguments ok in tests (fixtures)
+    "FBT",     # Boolean positional args ok in tests
+    "PLR2004", # Magic values ok in tests
+    "S105",    # Hardcoded passwords ok in tests
+    "S106",    # Hardcoded passwords ok in tests
+]
+
+[tool.ruff.lint.flake8-annotations]
+# Autoriser les dynamic typing là où c'est raisonnable
+allow-star-arg-any = true
+suppress-dummy-args = true
+
+[tool.ruff.lint.flake8-type-checking]
+# Optimise les imports de types
+runtime-evaluated-base-classes = ["pydantic.BaseModel"]
+
+[tool.ruff.lint.isort]
+# Configuration isort pour des imports propres
+known-first-party = ["infrakit"]  # Remplace par ton nom de package
+force-sort-within-sections = true
+split-on-trailing-comma = false
+
+[tool.ruff.lint.pylint]
+# Limites raisonnables pour la complexité
+max-args = 7
+max-branches = 15
+max-returns = 6
+max-statements = 50
+
+[tool.ruff.lint.mccabe]
+# Complexité cyclomatique max
+max-complexity = 10
+
+[tool.ruff.format]
+# Configuration du formatter
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true
+docstring-code-line-length = 88
+
+[tool.pyright]
+pythonVersion = "3.11"
+pythonPlatform = "All"
+typeCheckingMode = "strict"
+
+include = ["src", "ton_package"]
+exclude = [
+    "**/__pycache__",
+    "**/.venv",
+    "**/build",
+    "**/dist",
+]
+
+# Options strictes
+strictListInference = true
+strictDictionaryInference = true
+strictSetInference = true
+strictParameterNoneValue = true
+
+# Tous les rapports en "error"
+reportMissingImports = "error"
+reportMissingTypeStubs = "error"
+reportMissingTypeArgument = "error"
+reportMissingParameterType = "error"
+reportUnknownVariableType = "error"
+reportUnknownMemberType = "error"
+reportUnknownArgumentType = "error"
+reportUnknownParameterType = "error"
+reportGeneralTypeIssues = "error"
+reportOptionalMemberAccess = "error"
+reportOptionalSubscript = "error"
+reportOptionalCall = "error"
+reportOptionalIterable = "error"
+reportOptionalContextManager = "error"
+reportOptionalOperand = "error"
+reportUntypedFunctionDecorator = "error"
+reportUntypedClassDecorator = "error"
+reportUntypedBaseClass = "error"
+
+# Warnings utiles
+reportUnusedImport = "warning"
+reportUnusedVariable = "warning"
+reportUnusedClass = "warning"
+reportUnusedFunction = "warning"
+reportDeprecated = "warning"
+reportPrivateUsage = "warning"
+reportImportCycles = "warning"
+reportImplicitOverride = "warning"
+
+useLibraryCodeForTypes = true
+
+
+[tool.bandit]
+exclude_dirs = ["tests", "test_*.py"]
+skips = ["B101"]  # assert_used - ok dans les tests
+
+
+[tool.pytest.ini_options]
+# Chemins
+testpaths = ["tests"]
+pythonpath = ["src"]  # ou ["."] si pas de dossier src
+
+# Options de base
+addopts = [
+    "-ra",                    # Résumé de tous les tests
+    "--strict-markers",
+    "--strict-config",
+    "--showlocals",
+]
+
+[tool.coverage.run]
+source = ["src"]              # Ton dossier de code source
+branch = true
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+fail_under = 80               # Seuil minimum 80%
+show_missing = true           # Affiche les lignes non couvertes
+skip_empty = true
+
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
