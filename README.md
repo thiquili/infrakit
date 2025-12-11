@@ -313,6 +313,81 @@ pre-commit autoupdate           # Update versions
 
 ---
 
+## Git Workflow: Rebase and Squash
+
+### Prerequisites
+
+Make sure your main branch is up to date:
+
+```bash
+git checkout main
+git pull
+```
+
+### Workflow Steps
+
+#### 1. Switch to your feature branch
+
+```bash
+git checkout your-feature-branch
+```
+
+#### 2. Rebase on main
+
+```bash
+git rebase main
+```
+
+This replays your commits on top of the latest main branch.
+
+#### 3. Squash your commits (interactive rebase)
+
+```bash
+git rebase -i main
+```
+
+An editor will open showing your commits. To squash them:
+
+- Keep `pick` on the first commit
+- Change `pick` to `squash` (or `s`) on all other commits you want to merge
+
+Example:
+
+```shell
+pick abc1234 First commit
+squash def5678 Second commit
+squash ghi9012 Third commit
+```
+
+Save and close the editor. A new editor will open for you to write the final commit message.
+
+#### 4. Push your changes
+
+Since you've rewritten history, you need to force push:
+
+```bash
+git push --force-with-lease
+```
+
+Or if that doesn't work:
+
+```bash
+git push -f
+```
+
+**Note:** Use `--force-with-lease` instead of `-f` as it's safer (checks no one else has pushed in the meantime).
+
+#### 5. Merge via Pull Request on GitHub
+
+Once your branch is pushed:
+
+1. Go to your repository on GitHub
+2. Click on "Pull requests" tab
+3. Click "New pull request"
+4. Select your feature branch to merge into main
+5. Review the changes and click "Create pull request"
+6. Once approved, click "Merge pull request" on GitHub
+
 ## 📝 License
 
 [Your license here]
