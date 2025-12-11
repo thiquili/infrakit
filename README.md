@@ -2,17 +2,93 @@
 
 A Python toolkit for infrastructure-agnostic applications with swappable backends and instant in-memory testing.
 
+## Objective organisation repo
+
+infrakit/
+├── src/
+│   └── infrakit/
+│       ├── __init__.py
+│       │
+│       ├── ports/                     # Interfaces (Protocol)
+│       │   ├── __init__.py
+│       │   ├── repository.py          # Repository[T]
+│       │   ├── storage.py             # Storage
+│       │   ├── queue.py               # Queue
+│       │   ├── cache.py               # Cache
+│       │   ├── email.py               # Mailer
+│       │   └── vectordb.py            # VectorStore
+│       │
+│       ├── adapters/                  # Implémentations
+│       │   ├── __init__.py
+│       │   │
+│       │   ├── repository/
+│       │   │   ├── __init__.py
+│       │   │   ├── memory.py          # InMemoryRepository
+│       │   │   ├── postgres.py        # AsyncPostgresRepository
+│       │   │   └── mongo.py           # AsyncMongoRepository
+│       │   │
+│       │   ├── storage/
+│       │   │   ├── __init__.py
+│       │   │   ├── memory.py          # InMemoryStorage
+│       │   │   ├── local.py           # LocalFileStorage
+│       │   │   ├── s3.py              # S3Storage
+│       │   │   └── azure.py           # AzureBlobStorage
+│       │   │
+│       │   ├── queue/
+│       │   │   ├── __init__.py
+│       │   │   ├── memory.py          # InMemoryQueue
+│       │   │   └── rabbitmq.py        # RabbitMQQueue
+│       │   │
+│       │   ├── cache/
+│       │   │   ├── __init__.py
+│       │   │   ├── memory.py          # InMemoryCache
+│       │   │   └── redis.py           # RedisCache
+│       │   │
+│       │   ├── email/
+│       │   │   ├── __init__.py
+│       │   │   ├── memory.py          # InMemoryMailer
+│       │   │   ├── smtp.py            # SMTPMailer
+│       │   │   └── sendgrid.py        # SendGridMailer
+│       │   │
+│       │   └── vectordb/
+│       │       ├── __init__.py
+│       │       ├── memory.py          # InMemoryVectorStore
+│       │       ├── pinecone.py        # PineconeVectorStore
+│       │       └── qdrant.py          # QdrantVectorStore
+│       │
+│       └── testing/                   # Fixtures pytest
+│           ├── __init__.py
+│           ├── fixtures.py            # Fixtures communes
+│           ├── postgres.py            # pg_session, pg_container
+│           ├── mongo.py               # mongo_session, mongo_container
+│           ├── s3.py                  # s3_client (localstack)
+│           ├── redis.py               # redis_client
+│           └── rabbitmq.py            # rabbitmq_channel
+│
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py
+│   ├── unit/                          # Tests avec InMemory
+│   │   ├── test_repository.py
+│   │   ├── test_storage.py
+│   │   └── ...
+│   └── integration/                   # Tests avec Testcontainers
+│       ├── test_postgres.py
+│       ├── test_s3.py
+│       └── ...
+│
+
 ## 🛠️ Development Tools
 
 This project uses modern Python tooling to ensure code quality, maintainability, and reliability.
 
 | Tool          | Purpose                 | Config File                |
 |---------------|-------------------------|----------------------------|
-| **Ruff**      | Fast linter & formatter | `pyproject.toml`           |
-| **Pyright**   | Strict type checker     | `pyrightconfig.json`       |
-| **Pytest**    | Testing framework       | `pyproject.toml`           |
-| **Coverage**  | Code coverage           | `pyproject.toml`           |
-| **Pre-commit**| Automated Git hooks     | `.pre-commit-config.yaml`  |
+| __Ruff__      | Fast linter & formatter | `pyproject.toml`           |
+| __Pyright__   | Strict type checker     | `pyrightconfig.json`       |
+| __Pytest__    | Testing framework       | `pyproject.toml`           |
+| __Coverage__  | Code coverage           | `pyproject.toml`           |
+| __Pre-commit__| Automated Git hooks     | `.pre-commit-config.yaml`  |
 
 ---
 
@@ -38,7 +114,7 @@ pre-commit install
 
 Ruff is an extremely fast Python linter and formatter (written in Rust) that replaces Black, isort, flake8, and more.
 
-**Key features:**
+__Key features:__
 
 - Code style checks (PEP 8)
 - Auto-fix common issues
@@ -64,7 +140,7 @@ result = eval(user_input)  # noqa: S307
 x = 1  # noqa: E501, W293
 ```
 
-**Configuration:** See `[tool.ruff]` in `pyproject.toml`
+__Configuration:__ See `[tool.ruff]` in `pyproject.toml`
 
 ---
 
@@ -72,7 +148,7 @@ x = 1  # noqa: E501, W293
 
 Pyright is Microsoft's strict type checker for Python, used by VS Code/Pylance.
 
-**Why type checking?**
+__Why type checking?__
 
 - Catch errors before runtime
 - Better IDE autocomplete
@@ -104,7 +180,7 @@ result = legacy_function()  # type: ignore
 result = untyped_lib()      # type: ignore[no-untyped-call]
 ```
 
-**Configuration:** See `pyrightconfig.json`
+__Configuration:__ See `pyrightconfig.json`
 
 ---
 
@@ -154,7 +230,7 @@ pytest -k "test_name"     # Run tests matching pattern
 pytest tests/test_file.py::test_function  # Run specific test
 ```
 
-**Configuration:** See `[tool.pytest.ini_options]` in `pyproject.toml`
+__Configuration:__ See `[tool.pytest.ini_options]` in `pyproject.toml`
 
 ---
 
@@ -188,9 +264,9 @@ if DEBUG:  # pragma: no cover
     print("Debug info")
 ```
 
-**Configuration:** See `[tool.coverage]` in `pyproject.toml`
+__Configuration:__ See `[tool.coverage]` in `pyproject.toml`
 
-**Target:** Minimum 80% coverage (configured in `fail_under`)
+__Target:__ Minimum 80% coverage (configured in `fail_under`)
 
 ---
 
@@ -225,7 +301,7 @@ git commit --no-verify            # Bypass hooks (use sparingly!)
 - `pyright` - Type checking
 - Basic checks (trailing whitespace, YAML syntax, etc.)
 
-**Configuration:** See `.pre-commit-config.yaml`
+__Configuration:__ See `.pre-commit-config.yaml`
 
 ---
 
@@ -295,11 +371,11 @@ pre-commit autoupdate           # Update versions
 
 ### Documentation
 
-- **Ruff**: <https://docs.astral.sh/ruff/>
-- **Pyright**: <https://microsoft.github.io/pyright/>
-- **Pytest**: <https://docs.pytest.org/>
-- **Coverage**: <https://coverage.readthedocs.io/>
-- **Pre-commit**: <https://pre-commit.com/>
+- __Ruff__: <https://docs.astral.sh/ruff/>
+- __Pyright__: <https://microsoft.github.io/pyright/>
+- __Pytest__: <https://docs.pytest.org/>
+- __Coverage__: <https://coverage.readthedocs.io/>
+- __Pre-commit__: <https://pre-commit.com/>
 
 ---
 
@@ -375,7 +451,7 @@ Or if that doesn't work:
 git push -f
 ```
 
-**Note:** Use `--force-with-lease` instead of `-f` as it's safer (checks no one else has pushed in the meantime).
+__Note:__ Use `--force-with-lease` instead of `-f` as it's safer (checks no one else has pushed in the meantime).
 
 #### 5. Merge via Pull Request on GitHub
 
