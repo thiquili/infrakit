@@ -1,8 +1,20 @@
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from typing import Any, Generic, Protocol, TypeVar
 
-T = TypeVar("T")
 ID = TypeVar("ID")
+
+
+class HasId(Protocol):
+    """Protocol for entities that have an id attribute.
+
+    This allows the Repository to work with any class that has an id field,
+    without requiring inheritance from a base class.
+    """
+
+    id: Any
+
+
+T = TypeVar("T", bound=HasId)
 
 
 class Repository(ABC, Generic[T, ID]):
@@ -35,11 +47,15 @@ class Repository(ABC, Generic[T, ID]):
         """Retrieve all entities from the repository.
 
         Args:
-            limit: Maximum number of entities to retrieve. None for all entities.
-            offset: Number of entities to skip before starting retrieval.
+            limit: Maximum number of entities to retrieve (must be >= 0 if provided).
+                   None returns all entities.
+            offset: Number of entities to skip before starting retrieval (must be >= 0).
 
         Returns:
             A list of entities, respecting the limit and offset parameters.
+
+        Raises:
+            ValueError: If limit or offset is negative.
         """
 
     @abstractmethod
@@ -94,3 +110,7 @@ class Repository(ABC, Generic[T, ID]):
         Raises:
             NotFoundError: If no entity exists with the given identifier.
         """
+
+    @abstractmethod
+    def delete_all(self) -> None:
+        pass

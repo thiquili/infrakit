@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-
+    "python-ulid>=3.1.0",
 ]
 
 [dependency-groups]
@@ -16,6 +16,7 @@ dev = [
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "ruff>=0.14.8",
+    "pydantic>=2.12.5",
 ]
 [project.scripts]
 infrakit = "infrakit:main"
