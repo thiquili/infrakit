@@ -29,7 +29,7 @@ class Repository(ABC, Generic[T, ID]):
     """
 
     @abstractmethod
-    def get_by_id(self, entity_id: ID) -> T:
+    async def get_by_id(self, entity_id: ID) -> T:
         """Retrieve an entity by its unique identifier.
 
         Args:
@@ -43,7 +43,7 @@ class Repository(ABC, Generic[T, ID]):
         """
 
     @abstractmethod
-    def get_all(self, limit: int | None = None, offset: int = 0) -> list[T]:
+    async def get_all(self, limit: int | None = None, offset: int = 0) -> list[T]:
         """Retrieve all entities from the repository.
 
         Args:
@@ -59,7 +59,7 @@ class Repository(ABC, Generic[T, ID]):
         """
 
     @abstractmethod
-    def insert_one(self, entity: T) -> T:
+    async def insert_one(self, entity: T) -> T:
         """Insert a single entity into the repository.
 
         Args:
@@ -73,7 +73,7 @@ class Repository(ABC, Generic[T, ID]):
         """
 
     @abstractmethod
-    def insert_many(self, entities: list[T]) -> list[T]:
+    async def insert_many(self, entities: list[T]) -> list[T]:
         """Insert multiple entities into the repository in a single operation.
 
         Args:
@@ -87,7 +87,7 @@ class Repository(ABC, Generic[T, ID]):
         """
 
     @abstractmethod
-    def update(self, entity: T) -> T:
+    async def update(self, entity: T) -> T:
         """Update an existing entity in the repository.
 
         Args:
@@ -101,7 +101,7 @@ class Repository(ABC, Generic[T, ID]):
         """
 
     @abstractmethod
-    def delete_by_id(self, entity_id: ID) -> None:
+    async def delete_by_id(self, entity_id: ID) -> None:
         """Delete an entity from the repository by its identifier.
 
         Args:
@@ -112,5 +112,5 @@ class Repository(ABC, Generic[T, ID]):
         """
 
     @abstractmethod
-    def delete_all(self) -> None:
+    async def delete_all(self) -> None:
         pass

@@ -116,7 +116,7 @@ class InMemory(Repository[T, ID]):
             raise DuplicateError(msg)
 
     @override
-    def get_by_id(self, entity_id: ID) -> T:
+    async def get_by_id(self, entity_id: ID) -> T:
         """Retrieve an entity by its unique identifier.
 
         Args:
@@ -132,7 +132,7 @@ class InMemory(Repository[T, ID]):
         return self.entities[str(entity_id)]
 
     @override
-    def get_all(self, limit: int | None = None, offset: int = 0) -> list[T]:
+    async def get_all(self, limit: int | None = None, offset: int = 0) -> list[T]:
         """Retrieve all entities from the repository.
 
         Entities are returned in insertion order (the order in which they were added
@@ -165,7 +165,7 @@ class InMemory(Repository[T, ID]):
         return result[:limit]
 
     @override
-    def insert_one(self, entity: T) -> T:
+    async def insert_one(self, entity: T) -> T:
         """Insert a single entity into the repository.
 
         Args:
@@ -183,7 +183,7 @@ class InMemory(Repository[T, ID]):
         return entity
 
     @override
-    def insert_many(self, entities: list[T]) -> list[T]:
+    async def insert_many(self, entities: list[T]) -> list[T]:
         """Insert multiple entities into the repository in a single operation.
 
         This operation is atomic: if any entity fails validation, no entities
@@ -212,7 +212,7 @@ class InMemory(Repository[T, ID]):
         return entities
 
     @override
-    def delete_by_id(self, entity_id: ID) -> None:
+    async def delete_by_id(self, entity_id: ID) -> None:
         """Delete an entity from the repository by its identifier.
 
         Args:
@@ -225,7 +225,7 @@ class InMemory(Repository[T, ID]):
         del self.entities[str(entity_id)]
 
     @override
-    def delete_all(self) -> None:
+    async def delete_all(self) -> None:
         """Delete all entities from the repository.
 
         This operation clears the entire repository.
@@ -233,7 +233,7 @@ class InMemory(Repository[T, ID]):
         self._entities = {}
 
     @override
-    def update(self, entity: T) -> T:
+    async def update(self, entity: T) -> T:
         """Update an existing entity in the repository.
 
         Args:
