@@ -1,9 +1,15 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import override
 
 from infrakit.adapters.repository import ID, Repository, T
 from infrakit.ports.repository.in_memory import NotFoundError
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class SqlAlchemy(Repository[T, ID]):
@@ -26,7 +32,9 @@ class SqlAlchemy(Repository[T, ID]):
         These operations should be managed by the Unit of Work pattern.
     """
 
-    def __init__(self, session: AsyncSession, entity_model: type[T]) -> None:
+    def __init__(
+        self, session: AsyncSession, entity_model: type[T], *, auto_commit: bool = False
+    ) -> None:
         """Initialize the SQLAlchemy repository.
 
         Args:
@@ -35,6 +43,12 @@ class SqlAlchemy(Repository[T, ID]):
         """
         self.session = session
         self.entity_model = entity_model
+        self.auto_commit = auto_commit
+
+    async def _commit_if_enabled(self) -> None:
+        """Commit the session if auto_commit is enabled."""
+        if self.auto_commit:
+            await self.session.commit()
 
     @override
     async def get_by_id(self, entity_id: ID) -> T:
@@ -88,6 +102,7 @@ class SqlAlchemy(Repository[T, ID]):
             IntegrityError exceptions are caught and handled by the Unit of Work.
         """
         self.session.add(entity)
+        await self._commit_if_enabled()
         return entity
 
     @override
@@ -107,6 +122,7 @@ class SqlAlchemy(Repository[T, ID]):
             IntegrityError exceptions are caught and handled by the Unit of Work.
         """
         self.session.add_all(entities)
+        await self._commit_if_enabled()
         return entities
 
     @override
@@ -127,6 +143,7 @@ class SqlAlchemy(Repository[T, ID]):
         """
         await self.get_by_id(entity_id=entity.id)
         await self.session.merge(entity)
+        await self._commit_if_enabled()
         return entity
 
     @override
@@ -144,6 +161,7 @@ class SqlAlchemy(Repository[T, ID]):
         """
         existing = await self.get_by_id(entity_id=entity_id)
         await self.session.delete(existing)
+        await self._commit_if_enabled()
 
     @override
     async def delete_all(self) -> None:
@@ -157,3 +175,4 @@ class SqlAlchemy(Repository[T, ID]):
         """
         stmt = delete(self.entity_model)
         await self.session.execute(stmt)
+        await self._commit_if_enabled()
