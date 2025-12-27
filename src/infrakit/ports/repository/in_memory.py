@@ -1,21 +1,10 @@
 from typing_extensions import override
 
+from infrakit.adapters.exception import DatabaseError, EntityAlreadyExistError, EntityNotFoundError
 from infrakit.adapters.repository import ID, Repository, T
 
 
-class RepositoryError(Exception):
-    """Base exception for all repository-related errors."""
-
-
-class NotFoundError(RepositoryError):
-    """Raised when an entity with the specified ID cannot be found."""
-
-
-class DuplicateError(RepositoryError):
-    """Raised when attempting to insert an entity with an existing ID."""
-
-
-class EntityModelError(RepositoryError):
+class EntityModelError(DatabaseError):
     """Raised when the model of an entity does not match with the one instantiated."""
 
 
@@ -96,11 +85,11 @@ class InMemory(Repository[T, ID]):
             entity_id: The unique identifier to check.
 
         Raises:
-            NotFoundError: If no entity exists with the given identifier.
+            EntityNotFoundError: If no entity exists with the given identifier.
         """
         if str(entity_id) not in self.entities:
             msg = f"id {entity_id} not found"
-            raise NotFoundError(msg)
+            raise EntityNotFoundError(msg)
 
     def _ensure_entity_not_exists(self, entity_id: ID) -> None:
         """Ensure an entity with the given ID does not exist in the repository.
@@ -109,11 +98,11 @@ class InMemory(Repository[T, ID]):
             entity_id: The unique identifier to check.
 
         Raises:
-            DuplicateError: If an entity with the given identifier already exists.
+            EntityAlreadyExistError: If an entity with the given identifier already exists.
         """
         if str(entity_id) in self.entities:
             msg = f"id {entity_id} already exists"
-            raise DuplicateError(msg)
+            raise EntityAlreadyExistError(msg)
 
     @override
     async def get_by_id(self, entity_id: ID) -> T:
@@ -196,7 +185,7 @@ class InMemory(Repository[T, ID]):
             The list of inserted entities.
 
         Raises:
-            DuplicateError: If one or more entities with the same identifiers
+            EntityAlreadyExistError: If one or more entities with the same identifiers
                            already exist in the repository, or if duplicate IDs
                            are found within the input list.
         """
@@ -206,7 +195,7 @@ class InMemory(Repository[T, ID]):
             self._ensure_entity_not_exists(entity_id=entity.id)
             if str(entity.id) in inserts:
                 msg = f"duplicate id {entity.id} in input list"
-                raise DuplicateError(msg)
+                raise EntityAlreadyExistError(msg)
             inserts[str(entity.id)] = entity
         self.entities.update(inserts)
         return entities

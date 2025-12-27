@@ -3,10 +3,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from typing_extensions import override
 
+from infrakit.adapters.exception import EntityAlreadyExistError, EntityNotFoundError
 from infrakit.adapters.repository import ID, Repository, T
-from infrakit.ports.repository.in_memory import NotFoundError
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,7 +49,11 @@ class SqlAlchemy(Repository[T, ID]):
     async def _commit_if_enabled(self) -> None:
         """Commit the session if auto_commit is enabled."""
         if self.auto_commit:
-            await self.session.commit()
+            try:
+                await self.session.commit()
+            except IntegrityError as e:
+                msg = str(e)
+                raise EntityAlreadyExistError(msg) from e
 
     @override
     async def get_by_id(self, entity_id: ID) -> T:
@@ -66,7 +71,7 @@ class SqlAlchemy(Repository[T, ID]):
         entity = await self.session.get(self.entity_model, entity_id)
         if entity is None:
             msg = f"id {entity_id} not found"
-            raise NotFoundError(msg)
+            raise EntityNotFoundError(msg)
         return entity
 
     @override

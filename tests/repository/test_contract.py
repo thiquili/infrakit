@@ -18,8 +18,8 @@ from typing import Generic, TypeVar
 import pytest
 from ulid import ULID
 
+from infrakit.adapters.exception import DatabaseError, EntityAlreadyExistError, EntityNotFoundError
 from infrakit.adapters.repository import Repository
-from infrakit.ports.repository.in_memory import DuplicateError, NotFoundError, RepositoryError
 
 # Type variables for generic test class
 EntityType = TypeVar("EntityType")
@@ -141,7 +141,7 @@ class RepositoryContractTests(ABC, Generic[EntityType, IDType]):
     @pytest.mark.asyncio
     async def test_get_by_id_not_found(self, repository: Repository[EntityType, IDType]) -> None:
         """get_by_id() should raise NotFoundError if ID doesn't exist."""
-        with pytest.raises(NotFoundError, match="not found"):
+        with pytest.raises(EntityNotFoundError, match="not found"):
             await repository.get_by_id(entity_id=str(ULID()))
 
     # ==================== Contract Tests: get_all ====================
@@ -279,7 +279,7 @@ class RepositoryContractTests(ABC, Generic[EntityType, IDType]):
         """insert_one() with existing ID should raise DuplicateError."""
         duplicate_entity = entity_factory(entity_id=entity_ids[0], name="Duplicate")
 
-        with pytest.raises(DuplicateError, match="already exists"):
+        with pytest.raises(EntityAlreadyExistError, match="already exists"):
             await repository_with_entities.insert_one(duplicate_entity)
 
     # ==================== Contract Tests: insert_many ====================
@@ -307,7 +307,7 @@ class RepositoryContractTests(ABC, Generic[EntityType, IDType]):
         """insert_many() with one duplicate should raise DuplicateError."""
         entities = [entity_factory(entity_id=entity_ids[0], name="Duplicate")]
 
-        with pytest.raises(DuplicateError, match="already exists"):
+        with pytest.raises(EntityAlreadyExistError, match="already exists"):
             await repository_with_entities.insert_many(entities)
 
     @pytest.mark.asyncio
@@ -322,7 +322,9 @@ class RepositoryContractTests(ABC, Generic[EntityType, IDType]):
         entity2 = entity_factory(entity_id=entity1.id, name="Duplicate")
         entities = [entity1, entity2]
 
-        with pytest.raises(DuplicateError, match=f"duplicate id {entity1.id} in input list"):
+        with pytest.raises(
+            EntityAlreadyExistError, match=f"duplicate id {entity1.id} in input list"
+        ):
             await repository.insert_many(entities)
 
     @pytest.mark.asyncio
@@ -340,7 +342,7 @@ class RepositoryContractTests(ABC, Generic[EntityType, IDType]):
             entity_factory(entity_id=entity_ids[0], name="Duplicate"),  # Will fail
         ]
 
-        with pytest.raises(DuplicateError):
+        with pytest.raises(EntityAlreadyExistError):
             await repository_with_entities.insert_many(entities)
 
         # Verify atomicity: count should be unchanged
@@ -384,7 +386,7 @@ class RepositoryContractTests(ABC, Generic[EntityType, IDType]):
         """update() on non-existent entity should raise NotFoundError."""
         entity = entity_factory(name="Non-existent")
 
-        with pytest.raises(NotFoundError, match="not found"):
+        with pytest.raises(EntityNotFoundError, match="not found"):
             await repository.update(entity)
 
     # ==================== Contract Tests: delete_by_id ====================
@@ -405,7 +407,7 @@ class RepositoryContractTests(ABC, Generic[EntityType, IDType]):
     @pytest.mark.asyncio
     async def test_delete_failed(self, repository: Repository[EntityType, IDType]) -> None:
         """delete_by_id() on non-existent ID should raise NotFoundError."""
-        with pytest.raises(NotFoundError, match="not found"):
+        with pytest.raises(EntityNotFoundError, match="not found"):
             await repository.delete_by_id(entity_id="nonexistent_id_67890")
 
     # ==================== Contract Tests: delete_all ====================
@@ -465,11 +467,11 @@ class RepositoryContractTests(ABC, Generic[EntityType, IDType]):
     ) -> None:
         """All repository exceptions should inherit from RepositoryError."""
         # NotFoundError is a RepositoryError
-        with pytest.raises(RepositoryError):
+        with pytest.raises(DatabaseError):
             await repository.get_by_id(entity_id="nonexistent")
 
         # DuplicateError is a RepositoryError
         entity = entity_factory(name="Test")
         await repository.insert_one(entity)
-        with pytest.raises(RepositoryError):
+        with pytest.raises(DatabaseError):
             await repository.insert_one(entity)
