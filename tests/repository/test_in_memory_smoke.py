@@ -10,8 +10,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel
 import pytest
 
-from infrakit.adapters.exception import EntityAlreadyExistError, EntityNotFoundError
-from infrakit.ports.repository.in_memory import InMemory
+from infrakit.repository import EntityAlreadyExistsError, EntityNotFoundError, InMemory
 
 
 class Product(BaseModel):
@@ -84,7 +83,7 @@ class TestInMemoryWithIntId:
         await product_repo.insert_one(product)
 
         duplicate = Product(id=1, name="Different Product", price=500.00)
-        with pytest.raises(EntityAlreadyExistError, match="id 1 already exists"):
+        with pytest.raises(EntityAlreadyExistsError, match="Product with id '1' already exists"):
             await product_repo.insert_one(duplicate)
 
     @pytest.mark.asyncio
@@ -124,10 +123,14 @@ class TestInMemoryWithIntId:
         """Smoke test: NotFoundError with int IDs."""
         non_existent_id = uuid4()
 
-        with pytest.raises(EntityNotFoundError, match=f"id {non_existent_id} not found"):
+        with pytest.raises(
+            EntityNotFoundError, match=f"Product with id '{non_existent_id}' not found"
+        ):
             await product_repo.get_by_id(non_existent_id)
 
-        with pytest.raises(EntityNotFoundError, match=f"id {non_existent_id} not found"):
+        with pytest.raises(
+            EntityNotFoundError, match=f"Product with id '{non_existent_id}' not found"
+        ):
             await product_repo.delete_by_id(non_existent_id)
 
     @pytest.mark.asyncio
@@ -202,7 +205,9 @@ class TestInMemoryWithUUID:
         await order_repo.insert_one(order)
 
         duplicate = Order(id=order_id, order_number="ORD-002", total=200.00)
-        with pytest.raises(EntityAlreadyExistError, match=f"id {order_id} already exists"):
+        with pytest.raises(
+            EntityAlreadyExistsError, match=f"Order with id '{order_id}' already exists"
+        ):
             await order_repo.insert_one(duplicate)
 
     @pytest.mark.asyncio
@@ -243,10 +248,14 @@ class TestInMemoryWithUUID:
         """Smoke test: NotFoundError with UUID IDs."""
         non_existent_id = uuid4()
 
-        with pytest.raises(EntityNotFoundError, match=f"id {non_existent_id} not found"):
+        with pytest.raises(
+            EntityNotFoundError, match=f"Order with id '{non_existent_id}' not found"
+        ):
             await order_repo.get_by_id(non_existent_id)
 
-        with pytest.raises(EntityNotFoundError, match=f"id {non_existent_id} not found"):
+        with pytest.raises(
+            EntityNotFoundError, match=f"Order with id '{non_existent_id}' not found"
+        ):
             await order_repo.delete_by_id(non_existent_id)
 
     @pytest.mark.asyncio

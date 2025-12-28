@@ -14,7 +14,8 @@ import pytest
 import pytest_asyncio
 from ulid import ULID
 
-from infrakit.ports.repository.in_memory import EntityModelError, InMemory
+from infrakit.repository import InMemory
+from infrakit.repository.exceptions import EntityModelError
 from tests.repository.test_contract import RepositoryContractTests
 
 

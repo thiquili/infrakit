@@ -18,8 +18,13 @@ from typing import Generic, TypeVar
 import pytest
 from ulid import ULID
 
-from infrakit.adapters.exception import DatabaseError, EntityAlreadyExistError, EntityNotFoundError
-from infrakit.adapters.repository import Repository
+from infrakit.repository import Repository
+from infrakit.repository.exceptions import (
+    DatabaseError,
+    EntityAlreadyExistsError,
+    EntityNotFoundError,
+    PaginationParameterError,
+)
 
 # Type variables for generic test class
 EntityType = TypeVar("EntityType")
@@ -189,8 +194,8 @@ class RepositoryContractTests(ABC, Generic[EntityType, IDType]):
     async def test_get_all_with_limit_negative(
         self, repository_with_entities: Repository[EntityType, IDType]
     ) -> None:
-        """get_all(limit=-1) should raise ValueError."""
-        with pytest.raises(ValueError, match="limit must be non-negative"):
+        """get_all(limit=-1) should raise PaginationParameterError."""
+        with pytest.raises(PaginationParameterError, match="limit must be non-negative"):
             await repository_with_entities.get_all(limit=-1)
 
     @pytest.mark.asyncio
@@ -216,8 +221,8 @@ class RepositoryContractTests(ABC, Generic[EntityType, IDType]):
     async def test_get_all_with_offset_negative(
         self, repository_with_entities: Repository[EntityType, IDType]
     ) -> None:
-        """get_all(offset=-1) should raise ValueError."""
-        with pytest.raises(ValueError, match="offset must be non-negative"):
+        """get_all(offset=-1) should raise PaginationParameterError."""
+        with pytest.raises(PaginationParameterError, match="offset must be non-negative"):
             await repository_with_entities.get_all(offset=-1)
 
     @pytest.mark.asyncio
@@ -279,7 +284,7 @@ class RepositoryContractTests(ABC, Generic[EntityType, IDType]):
         """insert_one() with existing ID should raise DuplicateError."""
         duplicate_entity = entity_factory(entity_id=entity_ids[0], name="Duplicate")
 
-        with pytest.raises(EntityAlreadyExistError, match="already exists"):
+        with pytest.raises(EntityAlreadyExistsError, match="already exists"):
             await repository_with_entities.insert_one(duplicate_entity)
 
     # ==================== Contract Tests: insert_many ====================
@@ -307,7 +312,7 @@ class RepositoryContractTests(ABC, Generic[EntityType, IDType]):
         """insert_many() with one duplicate should raise DuplicateError."""
         entities = [entity_factory(entity_id=entity_ids[0], name="Duplicate")]
 
-        with pytest.raises(EntityAlreadyExistError, match="already exists"):
+        with pytest.raises(EntityAlreadyExistsError, match="already exists"):
             await repository_with_entities.insert_many(entities)
 
     @pytest.mark.asyncio
@@ -322,9 +327,7 @@ class RepositoryContractTests(ABC, Generic[EntityType, IDType]):
         entity2 = entity_factory(entity_id=entity1.id, name="Duplicate")
         entities = [entity1, entity2]
 
-        with pytest.raises(
-            EntityAlreadyExistError, match=f"duplicate id {entity1.id} in input list"
-        ):
+        with pytest.raises(EntityAlreadyExistsError, match="already exists"):
             await repository.insert_many(entities)
 
     @pytest.mark.asyncio
@@ -342,7 +345,7 @@ class RepositoryContractTests(ABC, Generic[EntityType, IDType]):
             entity_factory(entity_id=entity_ids[0], name="Duplicate"),  # Will fail
         ]
 
-        with pytest.raises(EntityAlreadyExistError):
+        with pytest.raises(EntityAlreadyExistsError):
             await repository_with_entities.insert_many(entities)
 
         # Verify atomicity: count should be unchanged
@@ -473,5 +476,7 @@ class RepositoryContractTests(ABC, Generic[EntityType, IDType]):
         # DuplicateError is a RepositoryError
         entity = entity_factory(name="Test")
         await repository.insert_one(entity)
+        # Create a NEW instance with the SAME ID to trigger duplicate error
+        duplicate = entity_factory(entity_id=entity.id, name="Duplicate")
         with pytest.raises(DatabaseError):
-            await repository.insert_one(entity)
+            await repository.insert_one(duplicate)

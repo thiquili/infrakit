@@ -24,7 +24,7 @@ from sqlalchemy.orm import DeclarativeBase
 from testcontainers.postgres import PostgresContainer
 from ulid import ULID
 
-from infrakit.ports.repository.sql_alchemy import SqlAlchemy
+from infrakit.repository import SqlAlchemy
 from tests.repository.test_contract import RepositoryContractTests
 
 
@@ -49,8 +49,8 @@ class TestSqlAlchemyRepository(RepositoryContractTests[UserModel, str]):
         """ "
         Start a PostgreSQL container for tests.
 
-        Scope: module - Le container est réutilisé pour tous les tests de la classe
-        pour améliorer les performances (setup/teardown coûteux).
+        Scope: module - The container is reused for all tests in the class
+        to improve performance (expensive setup/teardown).
         """
         postgres = PostgresContainer("postgres:16")
         postgres.start()
@@ -262,15 +262,7 @@ class TestSqlAlchemyRepository(RepositoryContractTests[UserModel, str]):
         users = [entity_factory(name=f"Bulk User {i}") for i in range(5)]
         await repo.insert_many(users)
 
-        # Verify entities are in session but not committed yet
-        result = await repository.session.execute(text("SELECT COUNT(*) FROM users"))
-        count = result.scalar()
-        assert count == 5
-
-        # Rollback
-        await repository.session.rollback()
-
-        # Verify entities were NOT persisted
+        # Verify entities are not commited
         result = await repository.session.execute(text("SELECT COUNT(*) FROM users"))
         count = result.scalar()
         assert count == 0

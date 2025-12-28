@@ -1,3 +1,5 @@
+"""Repository protocol definition."""
+
 from abc import ABC, abstractmethod
 from typing import Any, Generic, Protocol, TypeVar
 
@@ -21,7 +23,7 @@ class Repository(ABC, Generic[T, ID]):
     """Abstract base class for implementing the Repository pattern.
 
     This class provides a generic interface for data access operations (CRUD)
-    that can be implemented for relational databases
+    that can be implemented for various storage backends.
 
     Type Parameters:
         T: The entity type managed by this repository.
@@ -39,7 +41,7 @@ class Repository(ABC, Generic[T, ID]):
             The entity matching the given identifier.
 
         Raises:
-            NotFoundError: If no entity exists with the given identifier.
+            EntityNotFoundError: If no entity exists with the given identifier.
         """
 
     @abstractmethod
@@ -69,7 +71,7 @@ class Repository(ABC, Generic[T, ID]):
             The inserted entity, potentially with generated fields (e.g., ID, timestamps).
 
         Raises:
-            DuplicateError: If an entity with the same identifier already exists.
+            EntityAlreadyExistsError: If an entity with the same identifier already exists.
         """
 
     @abstractmethod
@@ -83,7 +85,7 @@ class Repository(ABC, Generic[T, ID]):
             The list of inserted entities, potentially with generated fields.
 
         Raises:
-            DuplicateError: If one or more entities with the same identifiers already exist.
+            EntityAlreadyExistsError: If one or more entities with the same identifiers already exist.
         """
 
     @abstractmethod
@@ -97,7 +99,7 @@ class Repository(ABC, Generic[T, ID]):
             The updated entity as stored in the repository.
 
         Raises:
-            NotFoundError: If no entity exists with the given identifier.
+            EntityNotFoundError: If no entity exists with the given identifier.
         """
 
     @abstractmethod
@@ -108,9 +110,12 @@ class Repository(ABC, Generic[T, ID]):
             entity_id: The unique identifier of the entity to delete.
 
         Raises:
-            NotFoundError: If no entity exists with the given identifier.
+            EntityNotFoundError: If no entity exists with the given identifier.
         """
 
     @abstractmethod
     async def delete_all(self) -> None:
-        pass
+        """Delete all entities from the repository.
+
+        This operation clears the entire repository.
+        """
