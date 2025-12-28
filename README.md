@@ -18,7 +18,7 @@ infrakit/
 │       │   ├── email.py               # Mailer
 │       │   └── vectordb.py            # VectorStore
 │       │
-│       ├── adapters/                  # Implémentations
+│       ├── adapters/                  # Implementations
 │       │   ├── __init__.py
 │       │   │
 │       │   ├── repository/
@@ -56,9 +56,9 @@ infrakit/
 │       │       ├── pinecone.py        # PineconeVectorStore
 │       │       └── qdrant.py          # QdrantVectorStore
 │       │
-│       └── testing/                   # Fixtures pytest
+│       └── testing/                   # Pytest fixtures
 │           ├── __init__.py
-│           ├── fixtures.py            # Fixtures communes
+│           ├── fixtures.py            # Common fixtures
 │           ├── postgres.py            # pg_session, pg_container
 │           ├── mongo.py               # mongo_session, mongo_container
 │           ├── s3.py                  # s3_client (localstack)

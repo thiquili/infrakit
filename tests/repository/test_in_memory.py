@@ -1,346 +1,136 @@
+"""
+Tests for InMemory repository implementation.
+
+This module tests the InMemory implementation by:
+1. Inheriting all contract tests from RepositoryContractTests
+2. Implementing verification methods using direct access to internal storage
+3. Adding InMemory-specific tests (entity model validation, insertion order)
+"""
+
 from collections.abc import Callable
-import random
 
 from pydantic import BaseModel
 import pytest
+import pytest_asyncio
 from ulid import ULID
 
-from infrakit.ports.repository.in_memory import (
-    DuplicateError,
-    EntityModelError,
-    InMemory,
-    NotFoundError,
-    RepositoryError,
-)
+from infrakit.repository import InMemory
+from infrakit.repository.exceptions import EntityModelError
+from tests.repository.test_contract import RepositoryContractTests
 
 
 class User(BaseModel):
-    id: ULID
+    id: str
     name: str
 
 
-@pytest.fixture
-def user_factory() -> Callable[..., User]:
-    def _create_user(user_id: ULID, name: str = "name") -> User:
-        return User(id=user_id, name=name)
-
-    return _create_user
-
-
-@pytest.fixture
-def in_memory() -> InMemory[User, str]:
-    in_memory: InMemory[User, str] = InMemory(entity_model=User)
-    return in_memory
-
-
-@pytest.fixture
-def in_memory_full(in_memory: InMemory, user_factory: Callable[..., User]) -> InMemory[User, str]:
-    random.seed(42)
-    for _i in range(10):
-        ulid = ULID()
-        in_memory.insert_one(user_factory(user_id=ulid, name=f"name {ulid}"))
-    return in_memory
-
-
-@pytest.fixture
-def keys_in_memory(in_memory_full: InMemory[User, str]) -> list[str]:
-    return list(in_memory_full.entities.keys())
-
-
-def test_init(in_memory: InMemory) -> None:
-    assert in_memory.entities == {}
-
-
-def test_get_by_id(
-    in_memory_full: InMemory, keys_in_memory: list[str], user_factory: Callable[..., User]
-) -> None:
-    for ulid in keys_in_memory:
-        assert in_memory_full.get_by_id(entity_id=ulid) == user_factory(
-            user_id=ulid, name=f"name {ulid}"
-        )
-
-
-def test_get_by_id_not_found(in_memory: InMemory) -> None:
-    with pytest.raises(NotFoundError, match="id 999 not found"):
-        in_memory.get_by_id(entity_id=999)
-
-
-def test_get_all(
-    in_memory_full: InMemory, keys_in_memory: list[str], user_factory: Callable[..., User]
-) -> None:
-    all_result = in_memory_full.get_all()
-    assert len(all_result) == 10
-    for index, entity in enumerate(all_result):
-        assert isinstance(entity, User)
-        assert entity.name == f"name {keys_in_memory[index]}"
-        assert entity.id == keys_in_memory[index]
-
-
-def test_get_all_with_limit_0(in_memory_full: InMemory) -> None:
-    all_result = in_memory_full.get_all(limit=0)
-    assert len(all_result) == 0
-
-
-def test_get_all_with_limit_5(
-    in_memory_full: InMemory, keys_in_memory: list[str], user_factory: Callable[..., User]
-) -> None:
-    limit = 5
-    all_result = in_memory_full.get_all(limit=limit)
-    assert len(all_result) == 5
-    for index, entity in enumerate(all_result):
-        assert isinstance(entity, User)
-        assert entity.name == f"name {keys_in_memory[index]}"
-        assert entity.id == keys_in_memory[index]
-
-
-def test_get_all_with_limit_superior_to_len_entities(
-    in_memory_full: InMemory, keys_in_memory: list[str], user_factory: Callable[..., User]
-) -> None:
-    all_result = in_memory_full.get_all(limit=15)
-    assert len(all_result) == 10
-    for index, entity in enumerate(all_result):
-        assert isinstance(entity, User)
-        assert entity.name == f"name {keys_in_memory[index]}"
-        assert entity.id == keys_in_memory[index]
-
-
-def test_get_all_with_limit_negative(in_memory_full: InMemory) -> None:
-    with pytest.raises(ValueError, match="limit must be non-negative"):
-        in_memory_full.get_all(limit=-1)
-
-
-def test_get_all_with_offset(
-    in_memory_full: InMemory, keys_in_memory: list[str], user_factory: Callable[..., User]
-) -> None:
-    offset = 6
-    all_result = in_memory_full.get_all(offset=offset)
-    assert len(all_result) == 4
-    for index, entity in enumerate(all_result):
-        new_index = index + offset
-        assert isinstance(entity, User)
-        assert entity.name == f"name {keys_in_memory[new_index]}"
-        assert entity.id == keys_in_memory[new_index]
-
-
-def test_get_all_with_offset_superior_to_len_entities(in_memory_full: InMemory) -> None:
-    offset = 15
-    all_result = in_memory_full.get_all(offset=offset)
-    assert len(all_result) == 0
-
-
-def test_get_all_with_offset_negative(in_memory_full: InMemory) -> None:
-    with pytest.raises(ValueError, match="offset must be non-negative"):
-        in_memory_full.get_all(offset=-1)
-
-
-def test_get_all_limit_with_offset_case_1(
-    in_memory_full: InMemory, keys_in_memory: list[str], user_factory: Callable[..., User]
-) -> None:
-    offset = 2
-    limit = 5
-    all_result = in_memory_full.get_all(limit=limit, offset=offset)
-    assert len(all_result) == 5
-    for index, entity in enumerate(all_result):
-        new_index = index + offset
-        assert isinstance(entity, User)
-        assert entity.name == f"name {keys_in_memory[new_index]}"
-        assert entity.id == keys_in_memory[new_index]
-
-
-def test_get_all_limit_with_offset_case_2(
-    in_memory_full: InMemory, keys_in_memory: list[str], user_factory: Callable[..., User]
-) -> None:
-    offset = 8
-    limit = 5
-    all_result = in_memory_full.get_all(limit=limit, offset=offset)
-    assert len(all_result) == 2
-    for index, entity in enumerate(all_result):
-        new_index = index + offset
-        assert isinstance(entity, User)
-        assert entity.name == f"name {keys_in_memory[new_index]}"
-        assert entity.id == keys_in_memory[new_index]
-
-
-def test_get_all_limit_with_offset_case_3(
-    in_memory_full: InMemory, user_factory: Callable[..., User]
-) -> None:
-    offset = 10
-    limit = 5
-    all_result = in_memory_full.get_all(limit=limit, offset=offset)
-    assert len(all_result) == 0
-
-
-def test_insert_one_empty_entities(in_memory: InMemory, user_factory: Callable[..., User]) -> None:
-    ulid = ULID()
-    result = in_memory.insert_one(user_factory(user_id=ulid, name="name 5"))
-    assert isinstance(result, User)
-    assert result.id == ulid
-    assert result.name == "name 5"
-
-
-def test_insert_one_with_id_taken(
-    in_memory_full: InMemory, keys_in_memory: list[str], user_factory: Callable[..., User]
-) -> None:
-    with pytest.raises(DuplicateError, match=f"id {keys_in_memory[0]} already exists"):
-        in_memory_full.insert_one(user_factory(user_id=keys_in_memory[0], name="name 5"))
-
-
-def test_delete_success(in_memory_full: InMemory, keys_in_memory: list[str]) -> None:
-    in_memory_full.delete_by_id(entity_id=keys_in_memory[0])
-    with pytest.raises(NotFoundError, match=f"id {keys_in_memory[0]} not found"):
-        in_memory_full.get_by_id(entity_id=keys_in_memory[0])
-
-
-def test_delete_failed(in_memory: InMemory) -> None:
-    ulid = ULID()
-    with pytest.raises(NotFoundError, match=f"id {ulid} not found"):
-        in_memory.delete_by_id(entity_id=ulid)
-
-
-def test_delete_all_success(in_memory_full: InMemory) -> None:
-    in_memory_full.delete_all()
-    assert in_memory_full.get_all() == []
-
-
-def test_delete_all_empty(in_memory: InMemory) -> None:
-    in_memory.delete_all()
-    assert in_memory.get_all() == []
-
-
-def test_update_success(
-    in_memory_full: InMemory, keys_in_memory: list[str], user_factory: Callable[..., User]
-) -> None:
-    update_user = user_factory(user_id=keys_in_memory[0], name="name toto")
-    in_memory_full.update(update_user)
-    assert in_memory_full.get_by_id(update_user.id) == update_user
-
-
-def test_update_fail(in_memory: InMemory, user_factory: Callable[..., User]) -> None:
-    ulid = ULID()
-    update_user = user_factory(user_id=ulid, name="name 55")
-    with pytest.raises(NotFoundError, match=f"id {ulid} not found"):
-        in_memory.update(update_user)
-
-
-def test_insert_many_success(in_memory_full: InMemory, user_factory: Callable[..., User]) -> None:
-    users = [user_factory(user_id=ULID(), name=f"name {i}") for i in range(5)]
-    result = in_memory_full.insert_many(users)
-    assert len(result) == 5
-    assert len(in_memory_full.get_all()) == 15
-
-
-def test_insert_many_with__only_duplicate(
-    in_memory_full: InMemory, keys_in_memory: list[str], user_factory: Callable[..., User]
-) -> None:
-    users = [user_factory(user_id=keys_in_memory[0], name="duplicate")]
-    with pytest.raises(DuplicateError, match=f"id {keys_in_memory[0]} already exists"):
-        in_memory_full.insert_many(users)
-
-
-def test_insert_many_with_duplicates_in_list(
-    in_memory: InMemory, user_factory: Callable[..., User]
-) -> None:
-    ulid = ULID()
-    users = [
-        user_factory(user_id=ulid, name="first"),
-        user_factory(user_id=ulid, name="duplicate"),
-    ]
-    with pytest.raises(DuplicateError, match=f"duplicate id {ulid} in input list"):
-        in_memory.insert_many(users)
-
-
-def test_insert_many_atomicity(
-    in_memory_full: InMemory, keys_in_memory: list[str], user_factory: Callable[..., User]
-) -> None:
-    initial_count = len(in_memory_full.get_all())
-    ulid = ULID()
-    users = [
-        user_factory(user_id=ulid, name="new"),
-        user_factory(user_id=keys_in_memory[0], name="duplicate"),  # Va échouer
-    ]
-    with pytest.raises(DuplicateError):
-        in_memory_full.insert_many(users)
-    assert len(in_memory_full.get_all()) == initial_count
-    with pytest.raises(NotFoundError):
-        in_memory_full.get_by_id(ulid)
-
-
-def test_insert_many_empty_list(in_memory: InMemory) -> None:
-    result = in_memory.insert_many([])
-    assert result == []
-    assert len(in_memory.get_all()) == 0
-
-
-def test_complete(in_memory: InMemory, user_factory: Callable[..., User]) -> None:
-    ulid = ULID()
-    user = user_factory(user_id=ulid, name="new")
-    in_memory.insert_one(user)
-    assert in_memory.get_by_id(entity_id=ulid) == user
-    assert in_memory.get_all() == [user]
-    user.name = "update"
-    in_memory.update(user)
-    update_user = in_memory.get_by_id(entity_id=ulid)
-    update_user.name = "update"
-    in_memory.delete_by_id(entity_id=ulid)
-    assert in_memory.get_all() == []
-    with pytest.raises(NotFoundError):
-        in_memory.get_by_id(entity_id=ulid)
-
-
-def test_entity_model_raise_error(in_memory: InMemory) -> None:
-    class Company(BaseModel):
-        id: ULID
-        company_name: str
-
-    new_company = Company(id=ULID(), company_name="new")
-    with pytest.raises(EntityModelError, match="Entity must be of type User, got Company"):
-        in_memory.insert_one(new_company)
-    with pytest.raises(EntityModelError, match="Entity must be of type User, got Company"):
-        in_memory.insert_many([new_company])
-    with pytest.raises(EntityModelError, match="Entity must be of type User, got Company"):
-        in_memory.update(new_company)
-
-
-def test_get_all_preserves_insertion_order() -> None:
-    """Verify that get_all() returns entities in insertion order, not sorted by ID."""
-
-    class Product(BaseModel):
-        id: int
-        name: str
-
-    repo: InMemory[Product, int] = InMemory(entity_model=Product)
-
-    # Insert with IDs in non-ascending order
-    repo.insert_one(Product(id=300, name="Third"))
-    repo.insert_one(Product(id=100, name="First"))
-    repo.insert_one(Product(id=200, name="Second"))
-
-    result = repo.get_all()
-
-    # Should preserve insertion order, NOT sort by ID
-    assert [p.id for p in result] == [300, 100, 200]
-    assert [p.name for p in result] == ["Third", "First", "Second"]
-
-
-def test_repository_error_hierarchy(in_memory: InMemory, user_factory: Callable[..., User]) -> None:
-    """Verify that all repository exceptions inherit from RepositoryError."""
-    ulid = ULID()
-
-    # NotFoundError is a RepositoryError
-    with pytest.raises(RepositoryError):
-        in_memory.get_by_id(entity_id=ulid)
-
-    # DuplicateError is a RepositoryError
-    user = user_factory(user_id=ulid, name="test")
-    in_memory.insert_one(user)
-    with pytest.raises(RepositoryError):
-        in_memory.insert_one(user)
-
-    # EntityModelError is a RepositoryError
-    class Company(BaseModel):
-        id: ULID
-        company_name: str
-
-    company = Company(id=ULID(), company_name="test")
-    with pytest.raises(RepositoryError):
-        in_memory.insert_one(company)
+class TestInMemoryRepository(RepositoryContractTests[User, str]):
+    """Test suite for InMemory repository implementation."""
+
+    # ==================== Concrete Fixtures ====================
+
+    @pytest.fixture
+    def entity_factory(self) -> Callable[..., User]:
+        """Factory to create User entities for testing."""
+
+        def _create_user(entity_id: str | None = None, name: str = "Test User") -> User:
+            return User(id=entity_id or str(ULID()), name=name)
+
+        return _create_user
+
+    @pytest.fixture
+    def repository(self) -> InMemory[User, str]:
+        """Create an empty InMemory repository."""
+        return InMemory(entity_model=User)
+
+    @pytest_asyncio.fixture
+    async def repository_with_entities(
+        self, repository: InMemory[User, str], entity_factory: Callable[..., User]
+    ) -> InMemory[User, str]:
+        """
+        Create a repository with 10 pre-inserted entities.
+
+        Uses direct access to internal storage (_entities) to avoid
+        using repository.insert_one() in test setup.
+        """
+        for i in range(10):
+            user = entity_factory(name=f"User {i}")
+            # Direct access to internal storage (not via insert_one!)
+            repository._entities[user.id] = user  # noqa: SLF001
+        return repository
+
+    @pytest.fixture
+    def entity_ids(self, repository_with_entities: InMemory[User, str]) -> list[str]:
+        """Get list of entity IDs from the repository."""
+        # Direct access to internal storage (not via get_all!)
+        return list(repository_with_entities.entities.keys())
+
+    # ==================== Verification Methods ====================
+
+    async def _verify_entity_exists(self, repo: InMemory[User, str], entity_id: str) -> bool:
+        """Verify entity exists by directly checking internal storage."""
+        # Access via property to get the _entities dict
+        return str(entity_id) in repo.entities
+
+    async def _verify_entity_count(self, repo: InMemory[User, str]) -> int:
+        """Count entities by directly checking internal storage."""
+        return len(repo.entities)
+
+    async def _verify_entity_data(
+        self, repo: InMemory[User, str], entity_id: str, expected_name: str
+    ) -> bool:
+        """Verify entity data by directly checking internal storage."""
+        if str(entity_id) not in repo.entities:
+            return False
+        entity = repo.entities[str(entity_id)]
+        return entity.name == expected_name
+
+    # ==================== InMemory-Specific Tests ====================
+
+    @pytest.mark.asyncio
+    async def test_entity_model_raise_error(self, repository: InMemory[User, str]) -> None:
+        """InMemory should validate that entities match the expected model type."""
+
+        class Company(BaseModel):
+            id: str
+            company_name: str
+
+        new_company = Company(id=str(ULID()), company_name="Acme Corp")
+
+        # insert_one should reject wrong entity type
+        with pytest.raises(EntityModelError, match="Entity must be of type User, got Company"):
+            await repository.insert_one(new_company)  # type: ignore[arg-type]
+
+        # insert_many should reject wrong entity type
+        with pytest.raises(EntityModelError, match="Entity must be of type User, got Company"):
+            await repository.insert_many([new_company])  # type: ignore[arg-type]
+
+        # update should reject wrong entity type
+        with pytest.raises(EntityModelError, match="Entity must be of type User, got Company"):
+            await repository.update(new_company)  # type: ignore[arg-type]
+
+    @pytest.mark.asyncio
+    async def test_get_all_preserves_insertion_order(self) -> None:
+        """
+        Verify that get_all() returns entities in insertion order.
+
+        This is a documented behavior specific to InMemory implementation.
+        InMemory uses Python's dict which preserves insertion order (Python 3.7+).
+        """
+
+        class Product(BaseModel):
+            id: int
+            name: str
+
+        repo: InMemory[Product, int] = InMemory(entity_model=Product)
+
+        # Insert with IDs in non-ascending order
+        await repo.insert_one(Product(id=300, name="Third"))
+        await repo.insert_one(Product(id=100, name="First"))
+        await repo.insert_one(Product(id=200, name="Second"))
+
+        result = await repo.get_all()
+
+        # Should preserve insertion order, NOT sort by ID
+        assert [p.id for p in result] == [300, 100, 200]
+        assert [p.name for p in result] == ["Third", "First", "Second"]

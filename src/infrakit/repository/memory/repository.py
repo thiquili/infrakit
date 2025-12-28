@@ -1,22 +1,14 @@
+"""In-memory implementation of the Repository pattern."""
+
 from typing_extensions import override
 
-from infrakit.adapters.repository import ID, Repository, T
-
-
-class RepositoryError(Exception):
-    """Base exception for all repository-related errors."""
-
-
-class NotFoundError(RepositoryError):
-    """Raised when an entity with the specified ID cannot be found."""
-
-
-class DuplicateError(RepositoryError):
-    """Raised when attempting to insert an entity with an existing ID."""
-
-
-class EntityModelError(RepositoryError):
-    """Raised when the model of an entity does not match with the one instantiated."""
+from infrakit.repository.exceptions import (
+    EntityAlreadyExistsError,
+    EntityModelError,
+    EntityNotFoundError,
+    PaginationParameterError,
+)
+from infrakit.repository.protocols import ID, Repository, T
 
 
 class InMemory(Repository[T, ID]):
@@ -96,11 +88,12 @@ class InMemory(Repository[T, ID]):
             entity_id: The unique identifier to check.
 
         Raises:
-            NotFoundError: If no entity exists with the given identifier.
+            EntityNotFoundError: If no entity exists with the given identifier.
         """
         if str(entity_id) not in self.entities:
-            msg = f"id {entity_id} not found"
-            raise NotFoundError(msg)
+            raise EntityNotFoundError(
+                entity_type=self.entity_model.__name__, entity_id=str(entity_id)
+            )
 
     def _ensure_entity_not_exists(self, entity_id: ID) -> None:
         """Ensure an entity with the given ID does not exist in the repository.
@@ -109,14 +102,15 @@ class InMemory(Repository[T, ID]):
             entity_id: The unique identifier to check.
 
         Raises:
-            DuplicateError: If an entity with the given identifier already exists.
+            EntityAlreadyExistsError: If an entity with the given identifier already exists.
         """
         if str(entity_id) in self.entities:
-            msg = f"id {entity_id} already exists"
-            raise DuplicateError(msg)
+            raise EntityAlreadyExistsError(
+                entity_type=self.entity_model.__name__, entity_id=str(entity_id)
+            )
 
     @override
-    def get_by_id(self, entity_id: ID) -> T:
+    async def get_by_id(self, entity_id: ID) -> T:
         """Retrieve an entity by its unique identifier.
 
         Args:
@@ -126,13 +120,13 @@ class InMemory(Repository[T, ID]):
             The entity matching the given identifier.
 
         Raises:
-            NotFoundError: If no entity exists with the given identifier.
+            EntityNotFoundError: If no entity exists with the given identifier.
         """
         self._ensure_entity_exists(entity_id)
         return self.entities[str(entity_id)]
 
     @override
-    def get_all(self, limit: int | None = None, offset: int = 0) -> list[T]:
+    async def get_all(self, limit: int | None = None, offset: int = 0) -> list[T]:
         """Retrieve all entities from the repository.
 
         Entities are returned in insertion order (the order in which they were added
@@ -147,14 +141,14 @@ class InMemory(Repository[T, ID]):
             A list of entities in insertion order, respecting the limit and offset parameters.
 
         Raises:
-            ValueError: If limit or offset is negative.
+            PaginationParameterError: If limit or offset is negative.
         """
         if limit is not None and limit < 0:
-            msg = "limit must be non-negative"
-            raise ValueError(msg)
+            msg = "limit"
+            raise PaginationParameterError(msg, limit)
         if offset < 0:
-            msg = "offset must be non-negative"
-            raise ValueError(msg)
+            msg = "offset"
+            raise PaginationParameterError(msg, offset)
         result: list[T] = list(self.entities.values())
         if limit is None:
             if offset > 0:
@@ -165,7 +159,7 @@ class InMemory(Repository[T, ID]):
         return result[:limit]
 
     @override
-    def insert_one(self, entity: T) -> T:
+    async def insert_one(self, entity: T) -> T:
         """Insert a single entity into the repository.
 
         Args:
@@ -175,7 +169,7 @@ class InMemory(Repository[T, ID]):
             The inserted entity.
 
         Raises:
-            DuplicateError: If an entity with the same identifier already exists.
+            EntityAlreadyExistsError: If an entity with the same identifier already exists.
         """
         self._ensure_entity_model(entity)
         self._ensure_entity_not_exists(entity_id=entity.id)
@@ -183,7 +177,7 @@ class InMemory(Repository[T, ID]):
         return entity
 
     @override
-    def insert_many(self, entities: list[T]) -> list[T]:
+    async def insert_many(self, entities: list[T]) -> list[T]:
         """Insert multiple entities into the repository in a single operation.
 
         This operation is atomic: if any entity fails validation, no entities
@@ -196,7 +190,7 @@ class InMemory(Repository[T, ID]):
             The list of inserted entities.
 
         Raises:
-            DuplicateError: If one or more entities with the same identifiers
+            EntityAlreadyExistsError: If one or more entities with the same identifiers
                            already exist in the repository, or if duplicate IDs
                            are found within the input list.
         """
@@ -204,28 +198,31 @@ class InMemory(Repository[T, ID]):
         for entity in entities:
             self._ensure_entity_model(entity)
             self._ensure_entity_not_exists(entity_id=entity.id)
+            # Check for duplicates within the input list
             if str(entity.id) in inserts:
-                msg = f"duplicate id {entity.id} in input list"
-                raise DuplicateError(msg)
+                raise EntityAlreadyExistsError(
+                    entity_type=self.entity_model.__name__,
+                    entity_id=str(entity.id),
+                )
             inserts[str(entity.id)] = entity
         self.entities.update(inserts)
         return entities
 
     @override
-    def delete_by_id(self, entity_id: ID) -> None:
+    async def delete_by_id(self, entity_id: ID) -> None:
         """Delete an entity from the repository by its identifier.
 
         Args:
             entity_id: The unique identifier of the entity to delete.
 
         Raises:
-            NotFoundError: If no entity exists with the given identifier.
+            EntityNotFoundError: If no entity exists with the given identifier.
         """
         self._ensure_entity_exists(entity_id)
         del self.entities[str(entity_id)]
 
     @override
-    def delete_all(self) -> None:
+    async def delete_all(self) -> None:
         """Delete all entities from the repository.
 
         This operation clears the entire repository.
@@ -233,7 +230,7 @@ class InMemory(Repository[T, ID]):
         self._entities = {}
 
     @override
-    def update(self, entity: T) -> T:
+    async def update(self, entity: T) -> T:
         """Update an existing entity in the repository.
 
         Args:
@@ -243,7 +240,7 @@ class InMemory(Repository[T, ID]):
             The updated entity as stored in the repository.
 
         Raises:
-            NotFoundError: If no entity exists with the given identifier.
+            EntityNotFoundError: If no entity exists with the given identifier.
         """
         self._ensure_entity_model(entity)
         self._ensure_entity_exists(entity.id)
