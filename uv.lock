@@ -365,43 +365,44 @@ wheels = [
 name = "infrakit"
 version = "0.1.0"
 source = { editable = "." }
-dependencies = [
-    { name = "asyncpg" },
-    { name = "pytest-asyncio" },
+
+[package.optional-dependencies]
+repository = [
     { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "testcontainers" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "asyncpg" },
     { name = "detect-secrets" },
     { name = "pre-commit" },
     { name = "pydantic" },
     { name = "pyright" },
     { name = "pytest" },
+    { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "python-ulid" },
     { name = "ruff" },
+    { name = "testcontainers" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "asyncpg", specifier = ">=0.30.0" },
-    { name = "pytest-asyncio", specifier = ">=0.24.0" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.45" },
-    { name = "testcontainers", specifier = ">=4.13.3" },
-]
+requires-dist = [{ name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'repository'", specifier = ">=2.0.45" }]
+provides-extras = ["repository"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "detect-secrets", specifier = ">=1.5.0" },
     { name = "pre-commit", specifier = ">=4.5.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pyright", specifier = ">=1.1.407" },
     { name = "pytest", specifier = ">=9.0.2" },
+    { name = "pytest-asyncio", specifier = ">=0.24.0" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "python-ulid", specifier = ">=3.1.0" },
     { name = "ruff", specifier = ">=0.14.8" },
+    { name = "testcontainers", specifier = ">=4.13.3" },
 ]
 
 [[package]]
