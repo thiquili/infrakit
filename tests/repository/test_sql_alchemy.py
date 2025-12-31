@@ -363,3 +363,61 @@ class TestSqlAlchemyRepository(RepositoryContractTests[UserModel, str]):
         # Verifications
         assert "connection lost" in str(exc_info.value) or "Database error" in str(exc_info.value)
         mock_rollback.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("sqlalchemy.ext.asyncio.AsyncSession.get")
+    async def test_get_by_id_error_returns_database_error(
+        self,
+        mock_get: AsyncMock,
+        session: AsyncSession,
+    ) -> None:
+        """
+        Verify that errors during get_by_id are caught and mapped to DatabaseError.
+
+        This test validates that:
+        - An exception during session.get() (e.g., OperationalError for connection loss)
+        - Is transformed into a generic DatabaseError by the repository
+        """
+        # Arrange: repository
+        repo = SqlAlchemy(session=session, entity_model=UserModel, auto_commit=False)
+
+        # Mock: session.get raises OperationalError (connection error)
+        mock_get.side_effect = OperationalError("connection lost during get", None, None)
+
+        # Act & Assert
+        with pytest.raises(DatabaseError) as exc_info:
+            await repo.get_by_id("some-id")
+
+        # Verifications
+        assert "connection lost during get" in str(exc_info.value) or "Database error" in str(
+            exc_info.value
+        )
+
+    @pytest.mark.asyncio
+    @patch("sqlalchemy.ext.asyncio.AsyncSession.execute")
+    async def test_get_all_error_returns_database_error(
+        self,
+        mock_execute: AsyncMock,
+        session: AsyncSession,
+    ) -> None:
+        """
+        Verify that errors during get_all are caught and mapped to DatabaseError.
+
+        This test validates that:
+        - An exception during session.execute() (e.g., OperationalError for connection loss)
+        - Is transformed into a generic DatabaseError by the repository
+        """
+        # Arrange: repository
+        repo = SqlAlchemy(session=session, entity_model=UserModel, auto_commit=False)
+
+        # Mock: session.execute raises OperationalError (connection error)
+        mock_execute.side_effect = OperationalError("connection lost during select", None, None)
+
+        # Act & Assert
+        with pytest.raises(DatabaseError) as exc_info:
+            await repo.get_all()
+
+        # Verifications
+        assert "connection lost during select" in str(exc_info.value) or "Database error" in str(
+            exc_info.value
+        )

@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, select
-from sqlalchemy.exc import DBAPIError
 from typing_extensions import override
 
 from infrakit.repository.exceptions import EntityNotFoundError
@@ -94,13 +93,21 @@ class SqlAlchemy(Repository[T, ID]):
 
         Raises:
             EntityNotFoundError: If no entity exists with the given identifier.
+            DatabaseError: Otherwise
         """
-        entity = await self.session.get(self.entity_model, entity_id)
-        if entity is None:
-            raise EntityNotFoundError(
-                entity_type=self.entity_model.__name__, entity_id=str(entity_id)
+        try:
+            entity = await self.session.get(self.entity_model, entity_id)
+        except Exception as e:
+            domain_error = self._exception_mapper.map(
+                error=e, entity_type=self.entity_model.__name__, entity_id=str(entity_id)
             )
-        return entity
+            raise domain_error from e
+        else:
+            if entity is None:
+                raise EntityNotFoundError(
+                    entity_type=self.entity_model.__name__, entity_id=str(entity_id)
+                )
+            return entity
 
     @override
     async def get_all(self, limit: int | None = None, offset: int = 0) -> list[T]:
@@ -115,13 +122,14 @@ class SqlAlchemy(Repository[T, ID]):
             A list of entities, respecting the limit and offset parameters.
 
         Raises:
-            PaginationParameterError: If limit or offset is negative.
+            PaginationParameterError: If limit or offset is negative
+            DatabaseError: Otherwise
         """
         try:
             query = select(self.entity_model).limit(limit).offset(offset)
             entities = await self.session.execute(query)
             return list(entities.scalars().all())
-        except DBAPIError as e:
+        except Exception as e:
             # Map database pagination errors to domain exception
             domain_error = self._exception_mapper.map(
                 error=e, entity_type=self.entity_model.__name__, entity_id=None
