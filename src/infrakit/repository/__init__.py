@@ -15,6 +15,7 @@ from infrakit.repository.exceptions import (
 from infrakit.repository.memory import InMemory
 from infrakit.repository.protocols import Repository
 from infrakit.repository.sqlalchemy import SqlAlchemy
+from infrakit.repository.sqlalchemy.unit_of_work import SqlAlchemyUnitOfWork
 
 __all__ = [  # noqa: RUF022
     # Core
@@ -28,4 +29,5 @@ __all__ = [  # noqa: RUF022
     # Implementations
     "InMemory",
     "SqlAlchemy",
+    "SqlAlchemyUnitOfWork",
 ]
