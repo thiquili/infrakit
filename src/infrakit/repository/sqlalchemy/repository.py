@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, select
-from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.exc import DBAPIError
 from typing_extensions import override
 
 from infrakit.repository.exceptions import EntityNotFoundError
@@ -61,8 +61,7 @@ class SqlAlchemy(Repository[T, ID]):
             entity_id: Entity ID for error messages
 
         Raises:
-            EntityAlreadyExistsError: If commit fails due to duplicate key
-            DatabaseError: If commit fails for other integrity reasons
+            DatabaseError: If commit fails (mapped from any infrastructure exception)
 
         Note:
             When auto_commit=False, this method does nothing. Errors will be
@@ -71,10 +70,11 @@ class SqlAlchemy(Repository[T, ID]):
         if self.auto_commit:
             try:
                 await self.session.commit()
-            except IntegrityError as e:
+            except Exception as e:
                 await self.session.rollback()
 
-                # Mapper l'exception infrastructure vers exception domaine
+                # Map infrastructure exception to domain exception
+                # The mapper always returns a DatabaseError (specific or generic)
                 domain_error = self._exception_mapper.map(
                     error=e,
                     entity_type=entity_type or self.entity_model.__name__,

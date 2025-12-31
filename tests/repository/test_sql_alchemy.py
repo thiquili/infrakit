@@ -10,10 +10,12 @@ See TESTING_RULES.md for important testing principles.
 """
 
 from collections.abc import AsyncGenerator, Callable, Generator
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
 from sqlalchemy import Column, String, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -25,6 +27,7 @@ from testcontainers.postgres import PostgresContainer
 from ulid import ULID
 
 from infrakit.repository import SqlAlchemy
+from infrakit.repository.exceptions import DatabaseError
 from tests.repository.test_contract import RepositoryContractTests
 
 
@@ -327,3 +330,36 @@ class TestSqlAlchemyRepository(RepositoryContractTests[UserModel, str]):
         )
         count = result.scalar()
         assert count == 0
+
+    @pytest.mark.asyncio
+    @patch("sqlalchemy.ext.asyncio.AsyncSession.commit")
+    @patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
+    async def test_unhandled_commit_error_returns_database_error(
+        self,
+        mock_rollback: AsyncMock,
+        mock_commit: AsyncMock,
+        session: AsyncSession,
+        entity_factory: Callable[..., UserModel],
+    ) -> None:
+        """
+        Verify that unhandled SQLAlchemy errors become DatabaseError.
+
+        This test validates that:
+        - An unmapped SQLAlchemy exception (e.g., OperationalError for connection)
+        - Is transformed into a generic DatabaseError by the SQLAlchemy repository
+        - Rollback is performed correctly
+        """
+        # Arrange: repository with auto_commit enabled
+        repo = SqlAlchemy(session=session, entity_model=UserModel, auto_commit=True)
+        user = entity_factory(name="Test User")
+
+        # Mock: session raises OperationalError on commit (connection error)
+        mock_commit.side_effect = OperationalError("connection lost", None, None)
+
+        # Act & Assert
+        with pytest.raises(DatabaseError) as exc_info:
+            await repo.insert_one(user)
+
+        # Verifications
+        assert "connection lost" in str(exc_info.value) or "Database error" in str(exc_info.value)
+        mock_rollback.assert_called_once()

@@ -40,10 +40,8 @@ class StrategyRegistry:
             entity_id: Optional entity ID
 
         Returns:
-            The mapped domain exception
-
-        Raises:
-            The original exception if no strategy can map it
+            The mapped domain exception (always returns a DatabaseError).
+            If no strategy can handle the error, returns a generic DatabaseError.
         """
         for strategy in self._strategies:
             if strategy.can_handle(error):
@@ -58,5 +56,7 @@ class StrategyRegistry:
                     )
                     continue
 
-        # No strategy was able to map, raise the original error
-        raise error
+        # No strategy was able to map, raise DatabaseError
+        return DatabaseError(
+            f"Database error during operation on {entity_type or 'unknown entity'}: {error}"
+        )
