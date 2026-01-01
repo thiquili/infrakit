@@ -124,3 +124,67 @@ async def test_something(
 ```
 
 **Why?** Explicit dependencies make tests more readable and maintainable. Anyone reading the test signature knows exactly what mocks and fixtures are involved.
+
+### Using Context Manager `with patch()` Instead of Decorator
+
+❌ **Don't do this:**
+
+```python
+async def test_commit_error(session: AsyncSession) -> None:
+    # BAD: Using context manager with patch()
+    with patch.object(session, 'commit', side_effect=OperationalError("error")):
+        with patch.object(session, 'rollback', new_callable=AsyncMock) as mock_rollback:
+            with pytest.raises(DatabaseError):
+                await repository.insert_one(user)
+            mock_rollback.assert_called_once()
+```
+
+✅ **Do this instead:**
+
+```python
+@pytest.mark.asyncio
+@patch("sqlalchemy.ext.asyncio.AsyncSession.commit")
+@patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
+async def test_commit_error(
+    mock_rollback: AsyncMock,
+    mock_commit: AsyncMock,
+    session: AsyncSession,
+) -> None:
+    # GOOD: Using decorators makes mocks explicit in parameters
+    mock_commit.side_effect = OperationalError("error")
+
+    with pytest.raises(DatabaseError):
+        await repository.insert_one(user)
+
+    mock_rollback.assert_called_once()
+```
+
+**Why?**
+
+- Decorators make mocks **explicit in the function signature**
+- Reduces nesting and improves readability
+- Mocks are visible as parameters, making dependencies clear
+- Consistent with explicit dependency principle
+
+---
+
+## Documentation Rules
+
+### Docstrings on Every Test
+
+**Always add a docstring to each unit test to explicitly state its objective.**
+
+✅ **Good example:**
+
+```python
+async def test_insert_one_creates_user_in_database(session: AsyncSession) -> None:
+    """Test that insert_one() correctly creates a user in the database."""
+    user = User(id=1, name="Alice", email="alice@example.com")
+
+    await repository.insert_one(user)
+
+    result = await session.execute(text("SELECT * FROM users WHERE id = 1"))
+    assert result.scalar() is not None
+```
+
+**Why?** Docstrings make the test's purpose immediately clear, improving readability and maintainability.

@@ -1,6 +1,7 @@
 """Repository protocol definition."""
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from typing import Any, Generic, Protocol, TypeVar
 
 ID = TypeVar("ID")
@@ -118,4 +119,32 @@ class Repository(ABC, Generic[T, ID]):
         """Delete all entities from the repository.
 
         This operation clears the entire repository.
+        """
+
+
+class UnitOfWork(ABC):
+    """Represents a unit of work for database operations.
+
+    A unit of work encapsulates a set of database operations that should be treated as a single logical transaction.
+    It ensures that all operations within the unit are executed atomically, either all succeed or all fail.
+    """
+
+    # TODO: fix typing
+    repositories: Mapping[type, Repository]  # pyright: ignore[reportMissingTypeArgument]
+
+    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        await self.rollback()
+
+    @abstractmethod
+    async def commit(self) -> None:
+        """Commit the changes made within this unit of work.
+
+        This method should be called to finalize the unit of work and persist the changes to the database.
+        If any operation within the unit fails, the entire unit will be rolled back.
+        """
+
+    @abstractmethod
+    async def rollback(self) -> None:
+        """
+        Defines an abstract method for rolling back an operation.
         """

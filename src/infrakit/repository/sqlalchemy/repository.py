@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, select
-from sqlalchemy.exc import DBAPIError, IntegrityError
 from typing_extensions import override
 
 from infrakit.repository.exceptions import EntityNotFoundError
 from infrakit.repository.protocols import ID, Repository, T
+from infrakit.repository.sqlalchemy.commit_manager import SqlAlchemyCommitManager
 from infrakit.repository.sqlalchemy.mapper import SqlAlchemyExceptionMapper
 
 if TYPE_CHECKING:
@@ -50,6 +50,7 @@ class SqlAlchemy(Repository[T, ID]):
         self.entity_model = entity_model
         self.auto_commit = auto_commit
         self._exception_mapper = SqlAlchemyExceptionMapper()
+        self._commit_manager = SqlAlchemyCommitManager(session, self._exception_mapper)
 
     async def _commit_if_enabled(
         self, entity_type: str | None = None, entity_id: str | None = None
@@ -61,26 +62,16 @@ class SqlAlchemy(Repository[T, ID]):
             entity_id: Entity ID for error messages
 
         Raises:
-            EntityAlreadyExistsError: If commit fails due to duplicate key
-            DatabaseError: If commit fails for other integrity reasons
+            DatabaseError: If commit fails (mapped from any infrastructure exception)
 
         Note:
             When auto_commit=False, this method does nothing. Errors will be
             detected when the session is committed externally (e.g., by a Unit of Work).
         """
         if self.auto_commit:
-            try:
-                await self.session.commit()
-            except IntegrityError as e:
-                await self.session.rollback()
-
-                # Mapper l'exception infrastructure vers exception domaine
-                domain_error = self._exception_mapper.map(
-                    error=e,
-                    entity_type=entity_type or self.entity_model.__name__,
-                    entity_id=entity_id or "unknown",
-                )
-                raise domain_error from e
+            await self._commit_manager.safe_commit(
+                entity_type=entity_type or self.entity_model.__name__, entity_id=entity_id
+            )
 
     @override
     async def get_by_id(self, entity_id: ID) -> T:
@@ -94,13 +85,21 @@ class SqlAlchemy(Repository[T, ID]):
 
         Raises:
             EntityNotFoundError: If no entity exists with the given identifier.
+            DatabaseError: Otherwise
         """
-        entity = await self.session.get(self.entity_model, entity_id)
-        if entity is None:
-            raise EntityNotFoundError(
-                entity_type=self.entity_model.__name__, entity_id=str(entity_id)
+        try:
+            entity = await self.session.get(self.entity_model, entity_id)
+        except Exception as e:
+            domain_error = self._exception_mapper.map(
+                error=e, entity_type=self.entity_model.__name__, entity_id=str(entity_id)
             )
-        return entity
+            raise domain_error from e
+        else:
+            if entity is None:
+                raise EntityNotFoundError(
+                    entity_type=self.entity_model.__name__, entity_id=str(entity_id)
+                )
+            return entity
 
     @override
     async def get_all(self, limit: int | None = None, offset: int = 0) -> list[T]:
@@ -115,13 +114,14 @@ class SqlAlchemy(Repository[T, ID]):
             A list of entities, respecting the limit and offset parameters.
 
         Raises:
-            PaginationParameterError: If limit or offset is negative.
+            PaginationParameterError: If limit or offset is negative
+            DatabaseError: Otherwise
         """
         try:
             query = select(self.entity_model).limit(limit).offset(offset)
             entities = await self.session.execute(query)
             return list(entities.scalars().all())
-        except DBAPIError as e:
+        except Exception as e:
             # Map database pagination errors to domain exception
             domain_error = self._exception_mapper.map(
                 error=e, entity_type=self.entity_model.__name__, entity_id=None

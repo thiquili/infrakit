@@ -60,7 +60,7 @@ repos:
     hooks:
       - id: pyright
         name: Pyright type checker
-        entry: pyright
+        entry: bash -c 'source .venv/bin/activate && pyright'
         language: system
         types: [python]
         pass_filenames: false  # Pyright gère tout le projet
