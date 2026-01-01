@@ -1,10 +1,11 @@
 from collections.abc import AsyncGenerator, Callable, Generator
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
 from sqlalchemy import Column, String, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -16,6 +17,7 @@ from testcontainers.postgres import PostgresContainer
 from ulid import ULID
 
 from infrakit.repository import SqlAlchemyUnitOfWork
+from infrakit.repository.exceptions import DatabaseError, EntityAlreadyExistsError
 
 
 class Base(DeclarativeBase):
@@ -216,9 +218,7 @@ class TestSqlAlchemyUnitOfWork:
             await s.repositories[Company].insert_one(
                 entity=company_entity_factory(name="Company 1")
             )
-            with pytest.raises(
-                IntegrityError, match="duplicate key value violates unique constraint"
-            ):
+            with pytest.raises(EntityAlreadyExistsError):
                 await s.commit()
 
         assert (await session.execute(text("SELECT COUNT(*) FROM users"))).scalar() == 1
@@ -318,3 +318,37 @@ class TestSqlAlchemyUnitOfWork:
             users = await s2.repositories[User].get_all()
             assert len(users) == 1
             assert users[0].name == "User 1"
+
+    @pytest.mark.asyncio
+    @patch("sqlalchemy.ext.asyncio.AsyncSession.commit")
+    @patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
+    async def test_unhandled_commit_error_returns_database_error(
+        self,
+        mock_rollback: AsyncMock,
+        mock_commit: AsyncMock,
+        uow: SqlAlchemyUnitOfWork,
+        user_entity_factory: Callable[..., User],
+    ) -> None:
+        """
+        Verify that unhandled errors during UoW commit are mapped to DatabaseError.
+
+        This test validates that:
+        - An unmapped exception during commit (e.g., OperationalError for connection loss)
+        - Is transformed into a generic DatabaseError by the UnitOfWork
+        - Rollback is performed correctly
+        """
+        # Mock: session.commit raises OperationalError (connection error)
+        mock_commit.side_effect = OperationalError("connection lost during commit", None, None)
+
+        # Act & Assert
+        async with uow as s:
+            await s.repositories[User].insert_one(user_entity_factory(name="Test User"))
+
+            with pytest.raises(DatabaseError) as exc_info:
+                await s.commit()
+
+            # Verifications
+            assert "connection lost during commit" in str(
+                exc_info.value
+            ) or "Database error" in str(exc_info.value)
+            mock_rollback.assert_called_once()

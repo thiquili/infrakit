@@ -9,6 +9,7 @@ from typing_extensions import override
 
 from infrakit.repository.exceptions import EntityNotFoundError
 from infrakit.repository.protocols import ID, Repository, T
+from infrakit.repository.sqlalchemy.commit_manager import SqlAlchemyCommitManager
 from infrakit.repository.sqlalchemy.mapper import SqlAlchemyExceptionMapper
 
 if TYPE_CHECKING:
@@ -49,6 +50,7 @@ class SqlAlchemy(Repository[T, ID]):
         self.entity_model = entity_model
         self.auto_commit = auto_commit
         self._exception_mapper = SqlAlchemyExceptionMapper()
+        self._commit_manager = SqlAlchemyCommitManager(session, self._exception_mapper)
 
     async def _commit_if_enabled(
         self, entity_type: str | None = None, entity_id: str | None = None
@@ -67,19 +69,9 @@ class SqlAlchemy(Repository[T, ID]):
             detected when the session is committed externally (e.g., by a Unit of Work).
         """
         if self.auto_commit:
-            try:
-                await self.session.commit()
-            except Exception as e:
-                await self.session.rollback()
-
-                # Map infrastructure exception to domain exception
-                # The mapper always returns a DatabaseError (specific or generic)
-                domain_error = self._exception_mapper.map(
-                    error=e,
-                    entity_type=entity_type or self.entity_model.__name__,
-                    entity_id=entity_id or "unknown",
-                )
-                raise domain_error from e
+            await self._commit_manager.safe_commit(
+                entity_type=entity_type or self.entity_model.__name__, entity_id=entity_id
+            )
 
     @override
     async def get_by_id(self, entity_id: ID) -> T:

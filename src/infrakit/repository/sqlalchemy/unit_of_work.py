@@ -5,6 +5,8 @@ from typing_extensions import override
 
 from infrakit.repository.protocols import HasId, UnitOfWork
 from infrakit.repository.sqlalchemy import SqlAlchemy
+from infrakit.repository.sqlalchemy.commit_manager import SqlAlchemyCommitManager
+from infrakit.repository.sqlalchemy.mapper import SqlAlchemyExceptionMapper
 
 
 class SqlAlchemyUnitOfWork(UnitOfWork):
@@ -35,6 +37,8 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
             Self: The unit of a work instance with initialized session and repositories.
         """
         self.session = self.session_factory()
+        self._exception_mapper = SqlAlchemyExceptionMapper()
+        self._commit_manager = SqlAlchemyCommitManager(self.session, self._exception_mapper)
         self.repositories = {
             entity_model: SqlAlchemy(
                 session=self.session, entity_model=entity_model, auto_commit=False
@@ -59,8 +63,12 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
 
     @override
     async def commit(self) -> None:
-        """Commit the current transaction, persisting all changes to the database."""
-        await self.session.commit()
+        """Commit the current transaction, persisting all changes to the database.
+
+        Raises:
+            DatabaseError: If the commit fails (mapped from any infrastructure exception)
+        """
+        await self._commit_manager.safe_commit(entity_type="Transaction", entity_id=None)
 
     @override
     async def rollback(self) -> None:
