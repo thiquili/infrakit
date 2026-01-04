@@ -2,10 +2,10 @@
 
 import copy
 from types import TracebackType
-from typing import Self
+from typing import Any, Self
 
 from infrakit.repository.exceptions import DatabaseError
-from infrakit.repository.protocols import HasId
+from infrakit.repository.protocols import T
 
 
 class InMemorySession:
@@ -34,21 +34,21 @@ class InMemorySession:
 
     Example - Auto-commit mode:
         >>> session = InMemorySession()
-        >>> storage = session._get_active_storage(User)
+        >>> storage = session.get_active_storage(User)
         >>> storage["1"] = User(id="1", name="Alice")
         # Change is immediately in permanent storage
 
     Example - Transaction mode:
         >>> session = InMemorySession()
         >>> await session.begin()
-        >>> storage = session._get_active_storage(User)
+        >>> storage = session.get_active_storage(User)
         >>> storage["1"] = User(id="1", name="Alice")
         >>> await session.commit()  # Now persisted
         # Or: await session.rollback()  # Discard changes
 
     Example - Context manager (recommended):
         >>> async with InMemorySession() as session:
-        ...     storage = session._get_active_storage(User)
+        ...     storage = session.get_active_storage(User)
         ...     storage["1"] = User(id="1", name="Alice")
         ...     # Auto-commit on exit (or rollback if exception)
     """
@@ -56,8 +56,8 @@ class InMemorySession:
     def __init__(self) -> None:
         """Initialize the session with empty storage and staging areas."""
         # Nested dict structure: {EntityType: {entity_id: entity_instance}}
-        self._staging: dict[type[HasId], dict[str, HasId]] = {}
-        self._storage: dict[type[HasId], dict[str, HasId]] = {}
+        self._staging: dict[type[Any], dict[str, Any]] = {}
+        self._storage: dict[type[Any], dict[str, Any]] = {}
         self._in_transaction = False
 
     async def begin(self) -> None:
@@ -69,7 +69,7 @@ class InMemorySession:
         After calling begin(), all repository operations will work on the staging
         area until commit() or rollback() is called.
 
-        **Important**: Only modify storage through _get_active_storage() during
+        **Important**: Only modify storage through get_active_storage() during
         a transaction. Direct modifications to _storage will not be rolled back.
 
         Raises:
@@ -106,11 +106,11 @@ class InMemorySession:
         """Roll back the current transaction, discarding all staged changes.
 
         The staging area is cleared and the transaction ends. Changes made through
-        _get_active_storage() are discarded since they only affected the staging area.
+        get_active_storage() are discarded since they only affected the staging area.
 
         **Important limitation**: This only discards changes made through the session API.
         If _storage was directly modified during the transaction (bad practice), those
-        changes will NOT be rolled back. Always use _get_active_storage() to ensure
+        changes will NOT be rolled back. Always use get_active_storage() to ensure
         proper transactional behavior.
 
         If no transaction is active, this method does nothing.
@@ -130,10 +130,10 @@ class InMemorySession:
         if self._in_transaction:
             await self.rollback()
 
-    def _get_committed_storage(self, entity_type: type[HasId]) -> dict[str, HasId]:
+    def get_committed_storage(self, entity_type: type[T]) -> dict[str, T]:
         """Get the committed storage dictionary for a specific entity type.
 
-        **Internal API**: This method is intended for use by InMemory repositories.
+        This method is intended for use by InMemory repositories.
         End users should interact with repositories and unit of work, not sessions directly.
 
         This method provides direct access to the committed data storage,
@@ -149,10 +149,10 @@ class InMemorySession:
         """
         return self._storage.setdefault(entity_type, {})
 
-    def _get_active_storage(self, entity_type: type[HasId]) -> dict[str, HasId]:
+    def get_active_storage(self, entity_type: type[T]) -> dict[str, T]:
         """Get the active storage dictionary for a specific entity type.
 
-        **Internal API**: This method is intended for use by InMemory repositories.
+        This method is intended for use by InMemory repositories.
         End users should interact with repositories and unit of work, not sessions directly.
 
         This is the transaction-aware method repositories should use for normal operations.
@@ -170,7 +170,7 @@ class InMemorySession:
         if self._in_transaction:
             return self._staging.setdefault(entity_type, {})
         # If no transaction is active, return committed storage (auto-commit mode)
-        return self._get_committed_storage(entity_type)
+        return self.get_committed_storage(entity_type)
 
     @property
     def in_transaction(self) -> bool:

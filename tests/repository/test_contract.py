@@ -16,6 +16,7 @@ from collections.abc import Callable
 from typing import Generic, TypeVar
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 from ulid import ULID
 
 from infrakit.repository import Repository
@@ -25,6 +26,7 @@ from infrakit.repository.exceptions import (
     EntityNotFoundError,
     PaginationParameterError,
 )
+from infrakit.repository.memory import InMemorySession
 
 # Type variables for generic test class
 EntityType = TypeVar("EntityType")
@@ -480,3 +482,102 @@ class RepositoryContractTests(ABC, Generic[EntityType, IDType]):
         duplicate = entity_factory(entity_id=entity.id, name="Duplicate")
         with pytest.raises(DatabaseError):
             await repository.insert_one(duplicate)
+
+    # ==================== Contract Tests: Auto-Commit Behavior ====================
+
+    @pytest.fixture
+    @abstractmethod
+    def repository_auto_commit_false(
+        self, session: AsyncSession | InMemorySession
+    ) -> Repository[EntityType, IDType]:
+        """Return a repository with auto_commit=False for transaction testing."""
+
+    @pytest.fixture
+    @abstractmethod
+    def repository_auto_commit_true(
+        self, session: AsyncSession | InMemorySession
+    ) -> Repository[EntityType, IDType]:
+        """Return a repository with auto_commit=True for immediate persistence testing."""
+
+    @abstractmethod
+    async def _rollback_session(self, repo: Repository[EntityType, IDType]) -> None:
+        """Roll back the current session/transaction.
+
+        For SqlAlchemy: session.rollback()
+        For InMemory: session.rollback()
+        """
+
+    @pytest.mark.asyncio
+    async def test_auto_commit_disabled_requires_manual_commit(
+        self,
+        repository_auto_commit_false: Repository[EntityType, IDType],
+        entity_factory: Callable[..., EntityType],
+    ) -> None:
+        """
+        When auto_commit=False, changes should not persist without manual commit.
+
+        This tests transaction behavior across all repository implementations.
+        """
+        repo = repository_auto_commit_false
+
+        # Insert entity
+        user = entity_factory(name="Transaction Test")
+        await repo.insert_one(user)
+
+        # Rollback the transaction
+        await self._rollback_session(repo)
+
+        # Verify entity was NOT persisted
+        assert not await self._verify_entity_exists(repo, user.id), (
+            "Entity should not persist after rollback with auto_commit=False"
+        )
+
+    @pytest.mark.asyncio
+    async def test_auto_commit_enabled_persists_immediately(
+        self,
+        repository_auto_commit_true: Repository[EntityType, IDType],
+        entity_factory: Callable[..., EntityType],
+    ) -> None:
+        """
+        When auto_commit=True, changes should persist immediately.
+
+        This tests auto-commit behavior across all repository implementations.
+        """
+        repo = repository_auto_commit_true
+
+        # Insert entity
+        user = entity_factory(name="Auto Commit Test")
+        await repo.insert_one(user)
+
+        # Verify entity was persisted immediately
+        assert await self._verify_entity_exists(repo, user.id), (
+            "Entity should persist immediately with auto_commit=True"
+        )
+
+        # Verify data integrity
+        assert await self._verify_entity_data(repo, user.id, "Auto Commit Test")
+
+    @pytest.mark.asyncio
+    async def test_insert_many_with_auto_commit_false(
+        self,
+        repository_auto_commit_false: Repository[EntityType, IDType],
+        entity_factory: Callable[..., EntityType],
+    ) -> None:
+        """
+        insert_many with auto_commit=False should allow rollback.
+
+        This tests transaction control with bulk operations.
+        """
+        repo = repository_auto_commit_false
+
+        # Insert multiple entities
+        users = [entity_factory(name=f"Bulk User {i}") for i in range(5)]
+        await repo.insert_many(users)
+
+        # Verify entities are not committed (still in staging/transaction)
+        # Rolling back should discard them
+        await self._rollback_session(repo)
+
+        # Verify no entities persisted
+        count = await self._verify_entity_count(repo)
+        assert count == 0, "Entities should not persist after rollback"

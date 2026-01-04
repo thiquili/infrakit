@@ -1,5 +1,7 @@
 """In-memory implementation of the Repository pattern."""
 
+from __future__ import annotations
+
 from typing_extensions import override
 
 from infrakit.repository.exceptions import (
@@ -8,19 +10,25 @@ from infrakit.repository.exceptions import (
     EntityNotFoundError,
     PaginationParameterError,
 )
+from infrakit.repository.memory.session import InMemorySession
 from infrakit.repository.protocols import ID, Repository, T
 
 
 class InMemory(Repository[T, ID]):
     """In-memory implementation of the Repository pattern.
 
-    This implementation stores entities in a dictionary for fast access.
-    All operations are performed in-memory and data is not persisted.
+    This implementation stores entities in a dictionary for fast access
+    with optional auto-commit support via InMemorySession.
 
     Type Parameters:
         T: The entity type managed by this repository.
         ID: The type of the entity's identifier as stored in the entity itself
             (int, str, UUID, ULID, etc.).
+
+    Attributes:
+        session: The InMemorySession used for storage and transaction management.
+        entity_model: The entity class representing the entity type.
+        auto_commit: Whether to automatically commit after each operation.
 
     Important Note:
         While ID represents the type of identifiers in your entities, the internal
@@ -35,37 +43,80 @@ class InMemory(Repository[T, ID]):
                 id: ULID
                 name: str
 
-            # Repository uses str as dictionary keys internally
-            repo: InMemory[User, str] = InMemory(entity_model=User)
+            # Auto-commit mode: session created automatically
+            repo = InMemory(entity_model=User, auto_commit=True)
 
-            # But you can pass ULID objects to methods
-            user = User(id=ULID(), name="John")
-            repo.insert_one(user)
-            repo.get_by_id(user.id)  # Works with ULID object
+            # Transaction mode: session must be provided
+            session = InMemorySession()
+            repo = InMemory(entity_model=User, auto_commit=False, session=session)
+
+    Note:
+        When auto_commit=False, transaction management should be handled externally
+        (e.g., via a Unit of Work pattern).
     """
 
-    def __init__(self, entity_model: type[T]) -> None:
-        """Initialize an empty in-memory repository.
+    def __init__(
+        self,
+        entity_model: type[T],
+        *,
+        auto_commit: bool,
+        session: InMemorySession | None = None,
+    ) -> None:
+        """Initialize an in-memory repository.
 
         Args:
             entity_model: The entity class that this repository will manage.
+            auto_commit: Whether to automatically commit after each operation.
+                         Must be explicitly specified.
+            session: An InMemorySession instance for storage and transaction management.
+                     Required when auto_commit=False. If None and auto_commit=True,
+                     a new session is created automatically.
+
+        Raises:
+            ValueError: If session is None and auto_commit is False.
         """
-        self._entities: dict[str, T] = {}
+        if session is None:
+            if not auto_commit:
+                msg = "session is required when auto_commit=False"
+                raise ValueError(msg)
+            session = InMemorySession()
+        self.session = session
         self.entity_model = entity_model
+        self.auto_commit = auto_commit
 
     @property
     def entities(self) -> dict[str, T]:
-        """Get read-only access to the entities dictionary.
+        """Get read-only access to the committed entities' dictionary.
 
         Returns:
             Dictionary mapping entity IDs (as strings) to entity instances.
 
         Note:
             This property exposes internal storage for testing purposes.
+            Returns committed storage, not staged changes during a transaction.
             Direct modification bypasses validation - use insert_one(),
             update(), and delete_by_id() methods instead.
         """
-        return self._entities
+        return self.session.get_committed_storage(self.entity_model)
+
+    def _get_storage(self) -> dict[str, T]:
+        """Get the active storage dictionary for this entity type.
+
+        Returns:
+            The active storage dictionary - staging if in transaction,
+            otherwise committed storage.
+        """
+        return self.session.get_active_storage(self.entity_model)
+
+    async def _commit_if_enabled(self) -> None:
+        """Commit the session if auto_commit is enabled.
+
+        Note:
+            When auto_commit=False, this method does nothing. Changes will be
+            committed when the session is committed externally (e.g., by a Unit of Work).
+        """
+        if self.auto_commit:
+            await self.session.commit()
 
     def _ensure_entity_model(self, entity: T) -> None:
         """Ensure an entity is of the correct model type.
@@ -90,7 +141,7 @@ class InMemory(Repository[T, ID]):
         Raises:
             EntityNotFoundError: If no entity exists with the given identifier.
         """
-        if str(entity_id) not in self.entities:
+        if str(entity_id) not in self._get_storage():
             raise EntityNotFoundError(
                 entity_type=self.entity_model.__name__, entity_id=str(entity_id)
             )
@@ -104,7 +155,7 @@ class InMemory(Repository[T, ID]):
         Raises:
             EntityAlreadyExistsError: If an entity with the given identifier already exists.
         """
-        if str(entity_id) in self.entities:
+        if str(entity_id) in self._get_storage():
             raise EntityAlreadyExistsError(
                 entity_type=self.entity_model.__name__, entity_id=str(entity_id)
             )
@@ -123,7 +174,7 @@ class InMemory(Repository[T, ID]):
             EntityNotFoundError: If no entity exists with the given identifier.
         """
         self._ensure_entity_exists(entity_id)
-        return self.entities[str(entity_id)]
+        return self._get_storage()[str(entity_id)]
 
     @override
     async def get_all(self, limit: int | None = None, offset: int = 0) -> list[T]:
@@ -149,7 +200,7 @@ class InMemory(Repository[T, ID]):
         if offset < 0:
             msg = "offset"
             raise PaginationParameterError(msg, offset)
-        result: list[T] = list(self.entities.values())
+        result: list[T] = list(self._get_storage().values())
         if limit is None:
             if offset > 0:
                 return result[offset:]
@@ -169,11 +220,13 @@ class InMemory(Repository[T, ID]):
             The inserted entity.
 
         Raises:
-            EntityAlreadyExistsError: If an entity with the same identifier already exists.
+            EntityAlreadyExistsError: If an entity with the same identifier already exists
+                (only when auto_commit=True or when committed by a Unit of Work).
         """
         self._ensure_entity_model(entity)
         self._ensure_entity_not_exists(entity_id=entity.id)
-        self.entities[str(entity.id)] = entity
+        self._get_storage()[str(entity.id)] = entity
+        await self._commit_if_enabled()
         return entity
 
     @override
@@ -192,8 +245,12 @@ class InMemory(Repository[T, ID]):
         Raises:
             EntityAlreadyExistsError: If one or more entities with the same identifiers
                            already exist in the repository, or if duplicate IDs
-                           are found within the input list.
+                           are found within the input list
+                           (only when auto_commit=True or when committed by a Unit of Work).
         """
+        if not entities:
+            return []
+
         inserts: dict[str, T] = {}
         for entity in entities:
             self._ensure_entity_model(entity)
@@ -205,7 +262,8 @@ class InMemory(Repository[T, ID]):
                     entity_id=str(entity.id),
                 )
             inserts[str(entity.id)] = entity
-        self.entities.update(inserts)
+        self._get_storage().update(inserts)
+        await self._commit_if_enabled()
         return entities
 
     @override
@@ -219,7 +277,8 @@ class InMemory(Repository[T, ID]):
             EntityNotFoundError: If no entity exists with the given identifier.
         """
         self._ensure_entity_exists(entity_id)
-        del self.entities[str(entity_id)]
+        del self._get_storage()[str(entity_id)]
+        await self._commit_if_enabled()
 
     @override
     async def delete_all(self) -> None:
@@ -227,7 +286,8 @@ class InMemory(Repository[T, ID]):
 
         This operation clears the entire repository.
         """
-        self._entities = {}
+        self._get_storage().clear()
+        await self._commit_if_enabled()
 
     @override
     async def update(self, entity: T) -> T:
@@ -244,5 +304,6 @@ class InMemory(Repository[T, ID]):
         """
         self._ensure_entity_model(entity)
         self._ensure_entity_exists(entity.id)
-        self.entities[str(entity.id)] = entity
+        self._get_storage()[str(entity.id)] = entity
+        await self._commit_if_enabled()
         return entity
