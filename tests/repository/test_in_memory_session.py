@@ -473,7 +473,7 @@ class TestInMemorySessionEdgeCases:
         # Test: second begin should raise DatabaseError
         with pytest.raises(
             DatabaseError,
-            match=r"Transaction already in progress. Call commit\\(\\) or rollback\\(\\) before starting a new transaction.",
+            match=r"Transaction already in progress. Call commit\(\) or rollback\(\) before starting a new transaction.",
         ):
             await session.begin()
 
