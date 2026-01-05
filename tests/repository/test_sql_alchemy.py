@@ -153,6 +153,22 @@ class TestSqlAlchemyRepository(RepositoryContractTests[UserModel, str]):
         result = await session.execute(text("SELECT id FROM users"))
         return [row[0] for row in result.fetchall()]
 
+    # ==================== Auto-Commit Fixtures ====================
+
+    @pytest.fixture
+    def repository_auto_commit_false(self, session: AsyncSession) -> SqlAlchemy[UserModel, str]:
+        """Create a repository with auto_commit=False for transaction testing."""
+        return SqlAlchemy(session=session, entity_model=UserModel, auto_commit=False)
+
+    @pytest.fixture
+    def repository_auto_commit_true(self, session: AsyncSession) -> SqlAlchemy[UserModel, str]:
+        """Create a repository with auto_commit=True for immediate persistence testing."""
+        return SqlAlchemy(session=session, entity_model=UserModel, auto_commit=True)
+
+    async def _rollback_session(self, repo: SqlAlchemy[UserModel, str]) -> None:
+        """Roll back the current session/transaction."""
+        await repo.session.rollback()
+
     # ==================== Verification Methods (Plain SQL) ====================
 
     async def _verify_entity_exists(self, repo: SqlAlchemy[UserModel, str], entity_id: str) -> bool:
@@ -193,82 +209,6 @@ class TestSqlAlchemyRepository(RepositoryContractTests[UserModel, str]):
         return row[0] == expected_name
 
     # ==================== SqlAlchemy-Specific Tests ====================
-
-    @pytest.mark.asyncio
-    async def test_auto_commit_disabled_requires_manual_commit(
-        self, repository: SqlAlchemy[UserModel, str], entity_factory: Callable[..., UserModel]
-    ) -> None:
-        """
-        When auto_commit=False, changes should not persist without manual commit.
-
-        This tests SqlAlchemy-specific transaction behavior.
-        """
-        # Create repository with auto_commit disabled using the same session
-        repo = SqlAlchemy(session=repository.session, entity_model=UserModel, auto_commit=False)
-
-        # Insert entity
-        user = entity_factory(name="Transaction Test")
-        await repo.insert_one(user)
-
-        # Rollback the transaction
-        await repository.session.rollback()
-
-        # Verify entity was NOT persisted (plain SQL verification)
-        result = await repository.session.execute(
-            text("SELECT COUNT(*) FROM users WHERE id = :id"), {"id": user.id}
-        )
-        count = result.scalar()
-        assert count == 0, "Entity should not persist after rollback with auto_commit=False"
-
-    @pytest.mark.asyncio
-    async def test_auto_commit_enabled_persists_immediately(
-        self, repository: SqlAlchemy[UserModel, str], entity_factory: Callable[..., UserModel]
-    ) -> None:
-        """
-        When auto_commit=True, changes should persist immediately.
-
-        This tests SqlAlchemy-specific auto-commit behavior.
-        """
-        # Create repository with auto_commit enabled using the same session
-        repo = SqlAlchemy(session=repository.session, entity_model=UserModel, auto_commit=True)
-
-        # Insert entity
-        user = entity_factory(name="Auto Commit Test")
-        await repo.insert_one(user)
-
-        # Verify entity was persisted (plain SQL verification)
-        result = await repository.session.execute(
-            text("SELECT COUNT(*) FROM users WHERE id = :id"), {"id": user.id}
-        )
-        count = result.scalar()
-        assert count == 1, "Entity should persist immediately with auto_commit=True"
-
-        # Verify data integrity (plain SQL)
-        result = await repository.session.execute(
-            text("SELECT name FROM users WHERE id = :id"), {"id": user.id}
-        )
-        name = result.scalar()
-        assert name == "Auto Commit Test"
-
-    @pytest.mark.asyncio
-    async def test_insert_many_with_auto_commit_false(
-        self, repository: SqlAlchemy[UserModel, str], entity_factory: Callable[..., UserModel]
-    ) -> None:
-        """
-        insert_many with auto_commit=False should allow rollback.
-
-        This tests transaction control with bulk operations.
-        """
-        repo = SqlAlchemy(session=repository.session, entity_model=UserModel, auto_commit=False)
-
-        # Insert multiple entities
-        users = [entity_factory(name=f"Bulk User {i}") for i in range(5)]
-        await repo.insert_many(users)
-
-        # Verify entities are not commited
-        result = await repository.session.execute(text("SELECT COUNT(*) FROM users"))
-        count = result.scalar()
-        assert count == 0
 
     @pytest.mark.asyncio
     async def test_update_with_plain_sql_verification(

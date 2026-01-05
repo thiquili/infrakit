@@ -16,6 +16,7 @@ from ulid import ULID
 
 from infrakit.repository import InMemory
 from infrakit.repository.exceptions import EntityModelError
+from infrakit.repository.memory.session import InMemorySession
 from tests.repository.test_contract import RepositoryContractTests
 
 
@@ -26,6 +27,13 @@ class User(BaseModel):
 
 class TestInMemoryRepository(RepositoryContractTests[User, str]):
     """Test suite for InMemory repository implementation."""
+
+    # ==================== Session Fixture ====================
+
+    @pytest.fixture
+    def session(self) -> InMemorySession:
+        """Create an InMemorySession for tests."""
+        return InMemorySession()
 
     # ==================== Concrete Fixtures ====================
 
@@ -39,9 +47,9 @@ class TestInMemoryRepository(RepositoryContractTests[User, str]):
         return _create_user
 
     @pytest.fixture
-    def repository(self) -> InMemory[User, str]:
-        """Create an empty InMemory repository."""
-        return InMemory(entity_model=User)
+    def repository(self, session: InMemorySession) -> InMemory[User, str]:
+        """Create an empty InMemory repository with auto_commit=True."""
+        return InMemory(entity_model=User, auto_commit=True, session=session)
 
     @pytest_asyncio.fixture
     async def repository_with_entities(
@@ -50,13 +58,14 @@ class TestInMemoryRepository(RepositoryContractTests[User, str]):
         """
         Create a repository with 10 pre-inserted entities.
 
-        Uses direct access to internal storage (_entities) to avoid
+        Uses direct access to internal storage via session to avoid
         using repository.insert_one() in test setup.
         """
+        # Direct access to committed storage (not via insert_one!)
+        storage = repository.session.get_committed_storage(User)
         for i in range(10):
             user = entity_factory(name=f"User {i}")
-            # Direct access to internal storage (not via insert_one!)
-            repository._entities[user.id] = user  # noqa: SLF001
+            storage[user.id] = user
         return repository
 
     @pytest.fixture
@@ -64,6 +73,24 @@ class TestInMemoryRepository(RepositoryContractTests[User, str]):
         """Get list of entity IDs from the repository."""
         # Direct access to internal storage (not via get_all!)
         return list(repository_with_entities.entities.keys())
+
+    # ==================== Auto-Commit Fixtures ====================
+
+    @pytest_asyncio.fixture
+    async def repository_auto_commit_false(self, session: InMemorySession) -> InMemory[User, str]:
+        """Create a repository with auto_commit=False for transaction testing."""
+        # Start a transaction so changes go to staging
+        await session.begin()
+        return InMemory(entity_model=User, auto_commit=False, session=session)
+
+    @pytest.fixture
+    def repository_auto_commit_true(self, session: InMemorySession) -> InMemory[User, str]:
+        """Create a repository with auto_commit=True for immediate persistence testing."""
+        return InMemory(entity_model=User, auto_commit=True, session=session)
+
+    async def _rollback_session(self, repo: InMemory[User, str]) -> None:
+        """Roll back the current session/transaction."""
+        await repo.session.rollback()
 
     # ==================== Verification Methods ====================
 
@@ -122,7 +149,7 @@ class TestInMemoryRepository(RepositoryContractTests[User, str]):
             id: int
             name: str
 
-        repo: InMemory[Product, int] = InMemory(entity_model=Product)
+        repo: InMemory[Product, int] = InMemory(entity_model=Product, auto_commit=True)
 
         # Insert with IDs in non-ascending order
         await repo.insert_one(Product(id=300, name="Third"))

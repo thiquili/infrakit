@@ -34,7 +34,7 @@ class TestInMemoryWithIntId:
 
     @pytest.fixture
     def product_repo(self) -> InMemory[Product, int]:
-        return InMemory(entity_model=Product)
+        return InMemory(entity_model=Product, auto_commit=True)
 
     @pytest.mark.asyncio
     async def test_basic_crud(self, product_repo: InMemory[Product, int]) -> None:
@@ -156,7 +156,7 @@ class TestInMemoryWithUUID:
 
     @pytest.fixture
     def order_repo(self) -> InMemory[Order, UUID]:
-        return InMemory(entity_model=Order)
+        return InMemory(entity_model=Order, auto_commit=True)
 
     @pytest.mark.asyncio
     async def test_basic_crud(self, order_repo: InMemory[Order, UUID]) -> None:

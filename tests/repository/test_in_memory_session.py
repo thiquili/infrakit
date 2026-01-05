@@ -40,15 +40,15 @@ class TestInMemorySessionActiveRecordPattern:
     """
 
     @pytest.mark.asyncio
-    async def test__get_active_storage_returns_storage_when_no_transaction(self) -> None:
-        """Test that _get_active_storage returns storage when no transaction is active."""
+    async def test_get_active_storage_returns_storage_when_no_transaction(self) -> None:
+        """Test that get_active_storage returns storage when no transaction is active."""
         session = InMemorySession()
 
-        # Add data directly to internal storage (not via _get_committed_storage!)
+        # Add data directly to internal storage (not via get_committed_storage!)
         session._storage[User] = {"1": User(id="1", name="Alice")}  # noqa: SLF001
 
-        # Test: _get_active_storage should return the same storage
-        staging = session._get_active_storage(User)  # noqa: SLF001
+        # Test: get_active_storage should return the same storage
+        staging = session.get_active_storage(User)
 
         # Verify: compare with direct access to _storage
         assert staging is session._storage[User]  # noqa: SLF001
@@ -56,14 +56,14 @@ class TestInMemorySessionActiveRecordPattern:
 
     @pytest.mark.asyncio
     async def test_changes_are_immediately_in_storage(self) -> None:
-        """Test that changes via _get_active_storage are immediately in storage when no transaction."""
+        """Test that changes via get_active_storage are immediately in storage when no transaction."""
         session = InMemorySession()
 
-        # Test: modify via _get_active_storage
-        staging = session._get_active_storage(User)  # noqa: SLF001
+        # Test: modify via get_active_storage
+        staging = session.get_active_storage(User)
         staging["1"] = User(id="1", name="Alice")
 
-        # Verify: check directly in _storage (not via _get_committed_storage!)
+        # Verify: check directly in _storage (not via get_committed_storage!)
         assert "1" in session._storage[User]  # noqa: SLF001
         assert session._storage[User]["1"].name == "Alice"  # noqa: SLF001
 
@@ -138,8 +138,8 @@ class TestInMemorySessionSessionBasedPattern:
         # Begin transaction
         await session.begin()
 
-        # Test: add data via _get_active_storage
-        session._get_active_storage(User)["1"] = User(id="1", name="Alice")  # noqa: SLF001
+        # Test: add data via get_active_storage
+        session.get_active_storage(User)["1"] = User(id="1", name="Alice")
 
         # Verify: should be in _staging
         assert "1" in session._staging[User]  # noqa: SLF001
@@ -155,9 +155,9 @@ class TestInMemorySessionSessionBasedPattern:
         # Begin transaction
         await session.begin()
 
-        # Setup: add data to staging via _get_active_storage
-        session._get_active_storage(User)["1"] = User(id="1", name="Alice")  # noqa: SLF001
-        session._get_active_storage(User)["2"] = User(id="2", name="Bob")  # noqa: SLF001
+        # Setup: add data to staging via get_active_storage
+        session.get_active_storage(User)["1"] = User(id="1", name="Alice")
+        session.get_active_storage(User)["2"] = User(id="2", name="Bob")
 
         # Test: commit
         await session.commit()
@@ -186,7 +186,7 @@ class TestInMemorySessionSessionBasedPattern:
         session = InMemorySession()
 
         await session.begin()
-        session._get_active_storage(User)["1"] = User(id="1", name="Alice")  # noqa: SLF001
+        session.get_active_storage(User)["1"] = User(id="1", name="Alice")
 
         # Test: commit
         await session.commit()
@@ -218,9 +218,9 @@ class TestInMemorySessionSessionBasedPattern:
         # Begin transaction
         await session.begin()
 
-        # Modify in staging via _get_active_storage
-        session._get_active_storage(User)["1"] = User(id="1", name="Modified Alice")  # noqa: SLF001
-        session._get_active_storage(User)["2"] = User(id="2", name="Bob")  # noqa: SLF001
+        # Modify in staging via get_active_storage
+        session.get_active_storage(User)["1"] = User(id="1", name="Modified Alice")
+        session.get_active_storage(User)["2"] = User(id="2", name="Bob")
 
         # Test: rollback
         await session.rollback()
@@ -247,9 +247,9 @@ class TestInMemorySessionSessionBasedPattern:
 
         await session.begin()
 
-        # Add different entity types via _get_active_storage
-        session._get_active_storage(User)["1"] = User(id="1", name="Alice")  # noqa: SLF001
-        session._get_active_storage(Order)["100"] = Order(id="100", total=500)  # noqa: SLF001
+        # Add different entity types via get_active_storage
+        session.get_active_storage(User)["1"] = User(id="1", name="Alice")
+        session.get_active_storage(Order)["100"] = Order(id="100", total=500)
 
         # Test: commit
         await session.commit()
@@ -273,8 +273,8 @@ class TestInMemorySessionIsolation:
         # Begin transaction (creates snapshot)
         await session.begin()
 
-        # Test: modify the entity in staging via _get_active_storage
-        session._get_active_storage(User)["1"].name = "Modified Alice"  # noqa: SLF001
+        # Test: modify the entity in staging via get_active_storage
+        session.get_active_storage(User)["1"].name = "Modified Alice"
 
         # Verify: storage should be unchanged (direct access)
         assert session._storage[User]["1"].name == "Alice"  # noqa: SLF001
@@ -286,9 +286,9 @@ class TestInMemorySessionIsolation:
 
         await session.begin()
 
-        # Add data to staging via _get_active_storage
+        # Add data to staging via get_active_storage
         user = User(id="1", name="Alice")
-        session._get_active_storage(User)["1"] = user  # noqa: SLF001
+        session.get_active_storage(User)["1"] = user
 
         # Test: commit
         await session.commit()
@@ -340,7 +340,7 @@ class TestInMemorySessionIsolation:
 
         # Add user to staging
         user = User(id="1", name="Alice")
-        staging_dict = session._get_active_storage(User)  # noqa: SLF001
+        staging_dict = session.get_active_storage(User)
         staging_dict["1"] = user
 
         # Keep a reference to staging before commit
@@ -373,7 +373,7 @@ class TestInMemorySessionContextManager:
         session = InMemorySession()
 
         async with session:
-            session._get_active_storage(User)["1"] = User(id="1", name="Alice")  # noqa: SLF001
+            session.get_active_storage(User)["1"] = User(id="1", name="Alice")
 
         # Verify: should be committed (direct access to _storage)
         assert "1" in session._storage[User]  # noqa: SLF001
@@ -389,7 +389,7 @@ class TestInMemorySessionContextManager:
 
         try:
             async with session:
-                session._get_active_storage(User)["2"] = User(id="2", name="Bob")  # noqa: SLF001
+                session.get_active_storage(User)["2"] = User(id="2", name="Bob")
                 msg = "Test error"
                 raise ValueError(msg)  # noqa: TRY301
         except ValueError:
@@ -429,7 +429,7 @@ class TestInMemorySessionClose:
 
         # Begin transaction and make changes
         await session.begin()
-        session._get_active_storage(User)["2"] = User(id="2", name="Bob")  # noqa: SLF001
+        session.get_active_storage(User)["2"] = User(id="2", name="Bob")
 
         # Test: close without commit
         await session.close()
@@ -468,12 +468,12 @@ class TestInMemorySessionEdgeCases:
 
         # First begin
         await session.begin()
-        session._get_active_storage(User)["2"] = User(id="2", name="Bob")  # noqa: SLF001
+        session.get_active_storage(User)["2"] = User(id="2", name="Bob")
 
         # Test: second begin should raise DatabaseError
         with pytest.raises(
             DatabaseError,
-            match=r"Transaction already in progress. Call commit\\(\\) or rollback\\(\\) before starting a new transaction.",
+            match=r"Transaction already in progress. Call commit\(\) or rollback\(\) before starting a new transaction.",
         ):
             await session.begin()
 
@@ -497,12 +497,12 @@ class TestInMemorySessionEdgeCases:
         assert not session.in_transaction
 
     @pytest.mark.asyncio
-    async def test__get_committed_storage_creates_empty_dict_for_new_entity_type(self) -> None:
-        """Test that _get_committed_storage creates an empty dict for new entity types."""
+    async def test_get_committed_storage_creates_empty_dict_for_new_entity_type(self) -> None:
+        """Test that get_committed_storage creates an empty dict for new entity types."""
         session = InMemorySession()
 
-        # Test: call _get_committed_storage for new entity type
-        storage = session._get_committed_storage(User)  # noqa: SLF001
+        # Test: call get_committed_storage for new entity type
+        storage = session.get_committed_storage(User)
 
         # Verify: should return empty dict
         assert storage == {}
@@ -512,16 +512,16 @@ class TestInMemorySessionEdgeCases:
         assert session._storage[User] == {}  # noqa: SLF001
 
     @pytest.mark.asyncio
-    async def test__get_active_storage_creates_empty_dict_for_new_entity_type_in_transaction(
+    async def test_get_active_storage_creates_empty_dict_for_new_entity_type_in_transaction(
         self,
     ) -> None:
-        """Test that _get_active_storage creates an empty dict for new entity types during transaction."""
+        """Test that get_active_storage creates an empty dict for new entity types during transaction."""
         session = InMemorySession()
 
         await session.begin()
 
-        # Test: call _get_active_storage for new entity type
-        staging = session._get_active_storage(User)  # noqa: SLF001
+        # Test: call get_active_storage for new entity type
+        staging = session.get_active_storage(User)
 
         # Verify: should return empty dict
         assert staging == {}
@@ -556,7 +556,7 @@ class TestInMemorySessionEdgeCases:
         await session.begin()
 
         # Add user via session (correct way - goes to staging)
-        session._get_active_storage(User)["2"] = User(id="2", name="Bob")  # noqa: SLF001
+        session.get_active_storage(User)["2"] = User(id="2", name="Bob")
 
         # BAD PRACTICE: Someone modifies storage directly during transaction
         session._storage[User]["3"] = User(id="3", name="Hacker")  # noqa: SLF001
@@ -590,13 +590,13 @@ class TestInMemorySessionEdgeCases:
         """Test that rollback() does NOT restore direct storage modifications.
 
         **Important limitation**: This documents a known limitation of the session.
-        Rollback only discards staged changes (changes made via _get_active_storage).
+        Rollback only discards staged changes (changes made via get_active_storage).
         If someone directly modifies _storage during a transaction, those changes
         will persist even after rollback.
 
         This is by design to avoid the performance cost of maintaining a second
         deep copy snapshot. Repositories should NEVER directly modify _storage
-        during a transaction - always use _get_active_storage().
+        during a transaction - always use get_active_storage().
         """
         session = InMemorySession()
 
@@ -607,7 +607,7 @@ class TestInMemorySessionEdgeCases:
         await session.begin()
 
         # Modify via session (correct way - goes to staging)
-        session._get_active_storage(User)["2"] = User(id="2", name="Bob")  # noqa: SLF001
+        session.get_active_storage(User)["2"] = User(id="2", name="Bob")
 
         # BAD PRACTICE: Modify storage directly (bypass session)
         session._storage[User]["3"] = User(id="3", name="Hacker")  # noqa: SLF001
@@ -623,4 +623,4 @@ class TestInMemorySessionEdgeCases:
         assert "3" in session._storage[User]  # noqa: SLF001 - Direct mod NOT rolled back!
         assert session._storage[User]["1"].name == "Modified Alice"  # noqa: SLF001 - NOT rolled back!
 
-        # This documents why repositories MUST use _get_active_storage()
+        # This documents why repositories MUST use get_active_storage()
