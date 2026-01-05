@@ -1,6 +1,6 @@
 # .pre-commit-config.yaml
 default_language_version:
-  python: python3.11  # Ajuste selon ta version
+  python: python3.13  # Ajuste selon ta version
 
 # Repos externes à exécuter avant les hooks locaux
 repos:
