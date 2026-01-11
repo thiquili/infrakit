@@ -6,7 +6,7 @@ This module tests:
 2. Integration with real PostgreSQL via testcontainers
 """
 
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -256,7 +256,7 @@ class TestCreateDefaultSessionFactoryIntegration:
     @pytest_asyncio.fixture
     async def engine_and_factory(
         self, env_from_container: dict[str, str]
-    ) -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
+    ) -> AsyncGenerator[tuple[AsyncEngine, async_sessionmaker[AsyncSession]], None]:
         """Create engine and session factory from the container."""
         engine, session_factory = create_default_session_factory()
         yield engine, session_factory
